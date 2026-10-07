@@ -240,7 +240,7 @@ function buildRecipe(input = {}) {
 
   if (recipeType === 'Drink') {
     return {
-      title: `${cuisine} ${subtype}`,
+      title: /^any\b/i.test(String(subtype).trim()) || /chef choice/i.test(String(subtype)) ? 'House Drink' : String(subtype).replace(/^.*?\s*\/\s*/,'').trim(),
       summary: `A ${subtype.toLowerCase()} built around ${cuisine} flavors and scaled for ${servings} serving${servings === 1 ? '' : 's'}.`,
       cuisine, servings, prepMinutes: 10, cookMinutes: 0, difficulty: 'Beginner friendly',
       tasteSummary: 'Balanced, refreshing, and customizable.',
@@ -271,8 +271,7 @@ function buildRecipe(input = {}) {
     const key = style.toLowerCase();
     const seasonalSweet = selectedFoods.find((food) => /strawber|berry|berries|peach|apple|pumpkin|cranber|citrus|lemon|pear|cherry|mango|banana|coconut|sweet potato/.test(String(food).toLowerCase())) || ({ Spring:'strawberries', Summer:'peaches', Fall:'apples', Winter:'citrus' }[season] || 'berries');
     const dessertName = key.includes('cookie') ? seasonalSweet + ' Cookies' : key.includes('brown') || key.includes('blond') ? seasonalSweet + ' Brownies' : key.includes('cupcake') ? seasonalSweet + ' Cupcakes' : key.includes('cheesecake') ? seasonalSweet + ' Cheesecake' : key.includes('pie') || key.includes('tart') ? seasonalSweet + ' Pie' : key.includes('cobbler') || key.includes('crisp') ? seasonalSweet + ' Cobbler' : key.includes('pastry') ? seasonalSweet + ' Pastries' : key.includes('donut') || key.includes('fried') ? seasonalSweet + ' Donuts' : key.includes('pudding') || key.includes('custard') ? seasonalSweet + ' Pudding' : key.includes('ice cream') || key.includes('frozen') ? seasonalSweet + ' Ice Cream' : key.includes('candy') || key.includes('confection') ? seasonalSweet + ' Candy Bites' : key.includes('bar') ? seasonalSweet + ' Dessert Bars' : key.includes('chocolate') ? 'Chocolate ' + seasonalSweet + ' Squares' : key.includes('caramel') ? 'Caramel ' + seasonalSweet + ' Bars' : key.includes('no-bake') ? 'No-Bake ' + seasonalSweet + ' Cheesecake Cups' : key.includes('fruit') ? seasonalSweet + ' Dessert Cups' : key.includes('cake') ? seasonalSweet + ' Cake' : seasonalSweet + ' Dessert Bars';
-    const cleanCuisine = /^any\b/i.test(String(cuisine).trim()) || /any cuisine/i.test(String(cuisine)) ? '' : String(cuisine).trim();
-    const title = (cleanCuisine ? cleanCuisine + ' ' : '') + dessertName;
+    const title = dessertName;
     const diets = Array.isArray(input.dietary) ? input.dietary.map(v => String(v).toLowerCase()) : [];
     const flourName = diets.some(v => v.includes('gluten')) ? 'gluten-free baking flour' : 'all-purpose flour';
     const milkName = diets.some(v => v.includes('dairy') || v.includes('vegan')) ? 'plant milk' : 'milk';
@@ -323,7 +322,20 @@ function buildRecipe(input = {}) {
   }
   const isSoup = String(subtype).toLowerCase().includes('soup') || String(input.meal || '').toLowerCase().includes('soup') || String(input.prompt || '').toLowerCase().includes('soup');
   const cleanProtein = String(protein).replace(/\s*\/.*$/,'').trim();
-  const title = isSoup ? `${cuisine} ${cleanProtein} Soup` : isSnack ? `${cuisine} ${cleanProtein} Bites` : `${cuisine} ${cleanProtein} ${String(subtype).toLowerCase().includes('breakfast') ? 'Breakfast' : String(subtype).toLowerCase().includes('brunch') ? 'Brunch' : 'Skillet'}`;
+  const cuisineKey = String(cuisine).toLowerCase();
+  const foodTitle = isSoup
+    ? `${cleanProtein} Soup`
+    : cuisineKey.includes('filipino') ? `${cleanProtein} Adobo`
+    : cuisineKey.includes('korean') ? `Gochujang ${cleanProtein}`
+    : cuisineKey.includes('japanese') ? `Teriyaki ${cleanProtein}`
+    : cuisineKey.includes('mexican') ? `${cleanProtein} Enchiladas`
+    : cuisineKey.includes('italian') ? `${cleanProtein} Primavera`
+    : cuisineKey.includes('creole') ? `${cleanProtein} Creole`
+    : cuisineKey.includes('cajun') ? `Cajun ${cleanProtein}`
+    : cuisineKey.includes('ethiopian') ? `Berbere ${cleanProtein} Stew`
+    : cuisineKey.includes('puerto') ? `${cleanProtein} Sofrito Stew`
+    : `${cleanProtein} Skillet`;
+  const title = foodTitle;
   const chosen = selectedFoods.length ? selectedFoods.join(', ') : base.veg;
   return {
     title,
