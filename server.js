@@ -200,6 +200,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const path = (req.url || '').split('?')[0];
     if (req.method === 'GET' && path === '/seasonal') { res.statusCode = 200; res.setHeader('content-type','text/html; charset=utf-8'); res.end(seasonalPage()); return; }
+    if (req.method === 'GET' && path === '/sw.js') { res.statusCode = 200; res.setHeader('content-type','application/javascript; charset=utf-8'); res.setHeader('cache-control','no-store, max-age=0'); res.end("self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.registration.unregister().then(()=>self.clients.matchAll()).then(cs=>Promise.all(cs.map(c=>c.navigate(c.url))))));"); return; }
 
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
@@ -267,7 +268,7 @@ const server = http.createServer(async (req, res) => {
     if (contentType.includes('text/html')) {
       let text = await upstream.text();
       text = text.replaceAll(upstreamOrigin, '');
-      const railwayGuard = '<script>if("serviceWorker" in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{})}</script>';
+      const railwayGuard = `<script>(function(){try{if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{})}const nativeFetch=window.fetch.bind(window);window.fetch=function(input,init){try{const url=typeof input==='string'?input:(input&&input.url)||'';const body=init&&typeof init.body==='string'?init.body:'';if(String(url).includes('/api/generate')||String(url).includes('api/generate')||body.includes('\\"/api/generate\\"')||body.includes('\\"path\\":\\"/api/generate\\"')){return nativeFetch('/railway-api/generate',{...(init||{}),method:'POST',headers:{'content-type':'application/json',...((init&&init.headers)||{})},body:init&&init.body?init.body:body})}}catch(e){}return nativeFetch(input,init)};const NativeXHR=window.XMLHttpRequest;window.XMLHttpRequest=function(){const xhr=new NativeXHR();let method='GET',url='';const open=xhr.open;xhr.open=function(m,u,...rest){method=m;url=String(u||'');if(url.includes('/api/generate')||url.includes('api/generate'))u='/railway-api/generate';return open.call(xhr,m,u,...rest)};const send=xhr.send;xhr.send=function(body){try{if((url.includes('/api/generate')||url.includes('api/generate'))&&method.toUpperCase()!=='POST')method='POST'}catch(e){}return send.call(xhr,body)};return xhr};window.XMLHttpRequest.prototype=NativeXHR.prototype}catch(e){console.error('RecipeCost Railway bridge init failed',e)}})();</script>`;
       text = text.replace('</head>', railwayGuard + '</head>');
       const seasonalLink = '<a href="/seasonal" style="position:fixed;right:18px;bottom:18px;z-index:99999;background:#7c3aed;color:#fff;padding:12px 16px;border-radius:999px;text-decoration:none;font:700 14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.2)">Seasonal Kitchen · Soups</a>';
       text = text.replace('</body>', seasonalLink + '</body>');
