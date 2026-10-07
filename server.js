@@ -396,4 +396,16 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, '0.0.0.0', () => {
   console.log('RecipeCost Railway deployment listening on port', port);
+  void (async () => {
+    try {
+      const asset = await fetch(upstreamOrigin + '/assets/index-C1-t6RJF.js');
+      const js = await asset.text();
+      for (const term of ['signIn','getUser','isSignedIn','signOut','offline_access','popup_blocked']) {
+        const pos = js.indexOf(term);
+        if (pos >= 0) console.log('[AUTH_BUNDLE]', term, js.slice(Math.max(0,pos-900), Math.min(js.length,pos+1800)));
+      }
+    } catch (e) {
+      console.log('[AUTH_BUNDLE_ERROR]', e instanceof Error ? e.message : String(e));
+    }
+  })();
 });
