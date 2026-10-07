@@ -86,6 +86,7 @@ function rewriteAuthBundle(js) {
     'isSignedIn(){const p=fn();return p?!se(p.accessToken)||!!p.refreshToken:!1}',
     'isSignedIn(){try{const p=JSON.parse(localStorage.getItem("rc_supabase_session")||"null");return!!(p&&p.access_token&&(!se(p.access_token)||p.refresh_token))}catch{return!1}}'
   );
+  js = js.replaceAll('https://recipecost-studio-h0fb5u.v2.appdeploy.ai/','https://recipecost-studio-production.up.railway.app/');
   return js;
 }
 
@@ -616,7 +617,7 @@ async function handlePrivateApi(req, res, path, body) {
       sendJson(res,{ok:true}); return true;
     }
     if (path === '/api/family/request-event' && req.method === 'POST') {
-      await supabaseJson('/rest/v1/household_members?user_id=eq.'+esc(uid),{method:'PATCH',token,body:{approval_requested:true}});
+      await supabaseJson('/rest/v1/rpc/request_family_event_approval',{method:'POST',token,body:{}});
       sendJson(res,{ok:true}); return true;
     }
     if (path.startsWith('/api/family/members/') && path.endsWith('/approval') && req.method === 'PUT') {
@@ -652,24 +653,6 @@ const server = http.createServer(async (req, res) => {
     const path = (req.url || '').split('?')[0];
     if (req.method === 'GET' && path === '/account') { res.statusCode=200; res.setHeader('content-type','text/html; charset=utf-8'); res.setHeader('cache-control','no-store'); res.end(accountPage()); return; }
     if (req.method === 'GET' && path === '/seasonal') { res.statusCode = 200; res.setHeader('content-type','text/html; charset=utf-8'); res.end(seasonalPage()); return; }
-    if (req.method === 'GET' && path === '/railway-debug/auth-bundle') {
-      const asset = await fetch(upstreamOrigin + '/assets/index-C1-t6RJF.js');
-      const js = await asset.text();
-      const terms = ['signIn','getUser','isSignedIn','signOut','offline_access','popup_blocked'];
-      const snippets = [];
-      for (const term of terms) {
-        let pos = 0;
-        while ((pos = js.indexOf(term, pos)) >= 0 && snippets.length < 120) {
-          snippets.push({ term, text: js.slice(Math.max(0,pos-700), Math.min(js.length,pos+1300)) });
-          pos += term.length;
-        }
-      }
-      res.statusCode = 200;
-      res.setHeader('content-type','application/json; charset=utf-8');
-      res.setHeader('cache-control','no-store');
-      res.end(JSON.stringify({ length:js.length, snippets }));
-      return;
-    }
     if (req.method === 'GET' && (path === '/media/image.svg' || path === '/media/clip.svg')) {
       const u = new URL(req.url || '/', 'https://recipecost.local');
       const svg = seasonalMediaSvg(u.searchParams.get('title') || 'Seasonal Recipe', u.searchParams.get('season') || currentSeason(), path === '/media/clip.svg');
@@ -717,6 +700,7 @@ const server = http.createServer(async (req, res) => {
     }
     headers.set('x-forwarded-host', req.headers.host || '');
     headers.set('x-forwarded-proto', 'https');
+    if (path.includes('/assets/') && path.endsWith('.js')) { headers.delete('if-none-match'); headers.delete('if-modified-since'); headers.set('cache-control','no-cache'); }
 
     const upstream = await fetch(target, {
       method: req.method,
@@ -769,16 +753,4 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, '0.0.0.0', () => {
   console.log('RecipeCost Railway deployment listening on port', port);
-  void (async () => {
-    try {
-      const asset = await fetch(upstreamOrigin + '/assets/index-C1-t6RJF.js');
-      const js = await asset.text();
-      for (const term of ['signIn','getUser','isSignedIn','signOut','offline_access','popup_blocked']) {
-        const pos = js.indexOf(term);
-        if (pos >= 0) console.log('[AUTH_BUNDLE]', term, js.slice(Math.max(0,pos-900), Math.min(js.length,pos+1800)));
-      }
-    } catch (e) {
-      console.log('[AUTH_BUNDLE_ERROR]', e instanceof Error ? e.message : String(e));
-    }
-  })();
 });
