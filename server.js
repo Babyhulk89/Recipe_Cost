@@ -365,9 +365,292 @@ function buildRecipe(input = {}) {
   };
 }
 
+
+function readBody(body) {
+  try { return body ? JSON.parse(body.toString('utf8')) : {}; } catch { return {}; }
+}
+
+function authContext(req) {
+  const token = bearerToken(req);
+  const claims = jwtPayload(token);
+  return token && claims?.sub ? { token, userId:claims.sub, email:claims.email || '', name:claims.name || claims.user_metadata?.full_name || String(claims.email || '').split('@')[0] || 'RecipeCost user' } : null;
+}
+
+async function handleAccountAuth(req, res, path, body) {
+  const input = readBody(body);
+  if (req.method === 'POST' && path === '/railway-auth/login') {
+    const email = String(input.email || '').trim();
+    const password = String(input.password || '');
+    if (!email || !password) { sendJson(res,{error:'Email and password are required.'},400); return true; }
+    try {
+      const session = await supabaseJson('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}});
+      sendJson(res,{session});
+    } catch (e) { sendJson(res,{error:e.message},e.status || 400); }
+    return true;
+  }
+  if (req.method === 'POST' && path === '/railway-auth/signup') {
+    const email = String(input.email || '').trim();
+    const password = String(input.password || '');
+    if (!email || !password) { sendJson(res,{error:'Email and password are required.'},400); return true; }
+    try {
+      const session = await supabaseJson('/auth/v1/signup?redirect_to=' + encodeURIComponent(railwayAccountUrl),{method:'POST',body:{email,password}});
+      sendJson(res,{session:session?.access_token ? session : null,user:session?.user || null});
+    } catch (e) { sendJson(res,{error:e.message},e.status || 400); }
+    return true;
+  }
+  if (req.method === 'POST' && path === '/railway-auth/recover') {
+    const email = String(input.email || '').trim();
+    if (!email) { sendJson(res,{error:'Enter your email address.'},400); return true; }
+    try {
+      await supabaseJson('/auth/v1/recover?redirect_to=' + encodeURIComponent(railwayAccountUrl),{method:'POST',body:{email}});
+      sendJson(res,{ok:true});
+    } catch (e) { sendJson(res,{error:e.message},e.status || 400); }
+    return true;
+  }
+  if (req.method === 'POST' && path === '/railway-auth/reset') {
+    const accessToken = String(input.accessToken || '');
+    const password = String(input.password || '');
+    if (!accessToken || password.length < 6) { sendJson(res,{error:'A valid reset session and a password of at least 6 characters are required.'},400); return true; }
+    try {
+      const user = await supabaseJson('/auth/v1/user',{method:'PUT',token:accessToken,body:{password}});
+      sendJson(res,{ok:true,user});
+    } catch (e) { sendJson(res,{error:e.message},e.status || 400); }
+    return true;
+  }
+  return false;
+}
+
+async function handlePrivateApi(req, res, path, body) {
+  const privatePath =
+    path.startsWith('/api/recipes') ||
+    path.startsWith('/api/profile/dietary') ||
+    path.startsWith('/api/grocery') ||
+    path.startsWith('/api/plans') ||
+    path.startsWith('/api/inventory') ||
+    path.startsWith('/api/purchases') ||
+    path.startsWith('/api/nutrition-log') ||
+    path.startsWith('/api/spending') ||
+    path.startsWith('/api/events') ||
+    path.startsWith('/api/family');
+  if (!privatePath) return false;
+
+  const auth = authContext(req);
+  if (!auth) { sendJson(res,{error:'Please sign in to your RecipeCost account.'},401); return true; }
+  const input = readBody(body);
+  const uid = auth.userId;
+  const token = auth.token;
+  const esc = encodeURIComponent;
+
+  try {
+    if (path === '/api/recipes' && req.method === 'GET') {
+      const rows = await supabaseJson('/rest/v1/saved_recipes?select=id,recipe,created_at&user_id=eq.'+esc(uid)+'&order=created_at.desc',{token});
+      sendJson(res,{items:(rows||[]).map(r=>({id:r.id,recipe:r.recipe,savedAt:r.created_at}))});
+      return true;
+    }
+    if (path === '/api/recipes' && req.method === 'POST') {
+      const recipe = input.recipe || {};
+      const rows = await supabaseJson('/rest/v1/saved_recipes',{method:'POST',token,prefer:'return=representation',body:{user_id:uid,title:String(recipe.title||'Untitled recipe'),recipe}});
+      sendJson(res,{item:rows?.[0] || null},201); return true;
+    }
+    if (path.startsWith('/api/recipes/') && req.method === 'DELETE') {
+      const id = path.split('/').pop();
+      await supabaseJson('/rest/v1/saved_recipes?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'DELETE',token});
+      sendJson(res,{ok:true}); return true;
+    }
+
+    if (path === '/api/profile/dietary' && req.method === 'GET') {
+      const rows = await supabaseJson('/rest/v1/dietary_profiles?select=dietary,allergies,avoid_foods,updated_at&user_id=eq.'+esc(uid)+'&limit=1',{token});
+      const p=rows?.[0];
+      sendJson(res,{profile:p?{dietary:p.dietary||[],allergies:p.allergies||[],avoidFoods:p.avoid_foods||'',updatedAt:p.updated_at}:null});
+      return true;
+    }
+    if (path === '/api/profile/dietary' && req.method === 'PUT') {
+      const rows = await supabaseJson('/rest/v1/dietary_profiles?on_conflict=user_id',{method:'POST',token,prefer:'resolution=merge-duplicates,return=representation',body:{user_id:uid,dietary:Array.isArray(input.dietary)?input.dietary:[],allergies:Array.isArray(input.allergies)?input.allergies:[],avoid_foods:String(input.avoidFoods||''),updated_at:new Date().toISOString()}});
+      sendJson(res,{profile:rows?.[0] || null}); return true;
+    }
+
+    if (path === '/api/grocery' && req.method === 'GET') {
+      const rows = await supabaseJson('/rest/v1/grocery_items?select=id,name,amount,unit,checked,recipe_title,created_at&user_id=eq.'+esc(uid)+'&order=created_at.desc',{token});
+      const purchases = await supabaseJson('/rest/v1/purchase_history?select=name,purchased_at,source&user_id=eq.'+esc(uid)+'&order=purchased_at.desc&limit=100',{token});
+      const latest=new Map();
+      for(const p of purchases||[]) if(!latest.has(String(p.name).toLowerCase())) latest.set(String(p.name).toLowerCase(),p);
+      const now=Date.now();
+      sendJson(res,{items:(rows||[]).map(r=>{const p=latest.get(String(r.name).toLowerCase());return{id:r.id,name:r.name,amount:Number(r.amount),unit:r.unit,sourceTitle:r.recipe_title||'Manual',checked:Boolean(r.checked),recentPurchase:p?{purchaseDate:String(p.purchased_at).slice(0,10),daysAgo:Math.max(0,Math.floor((now-new Date(p.purchased_at).getTime())/86400000)),source:p.source}:null}})});
+      return true;
+    }
+    if (path === '/api/grocery' && req.method === 'POST') {
+      const rows=await supabaseJson('/rest/v1/grocery_items',{method:'POST',token,prefer:'return=representation',body:{user_id:uid,name:String(input.name||'').trim(),amount:Number(input.amount||1),unit:String(input.unit||'item'),checked:false,recipe_title:'Manual'}});
+      sendJson(res,{item:rows?.[0]||null},201); return true;
+    }
+    if (path === '/api/grocery/bulk' && req.method === 'POST') {
+      let added=0,merged=0;
+      for(const item of Array.isArray(input.items)?input.items:[]) {
+        const existing=await supabaseJson('/rest/v1/grocery_items?select=id,amount&user_id=eq.'+esc(uid)+'&checked=eq.false&name=ilike.'+esc(String(item.name||''))+'&limit=1',{token});
+        if(existing?.[0]){
+          await supabaseJson('/rest/v1/grocery_items?id=eq.'+esc(existing[0].id),{method:'PATCH',token,body:{amount:Number(existing[0].amount||0)+Number(item.amount||1),unit:String(item.unit||'item'),updated_at:new Date().toISOString()}});
+          merged++;
+        }else{
+          await supabaseJson('/rest/v1/grocery_items',{method:'POST',token,body:{user_id:uid,name:String(item.name||'').trim(),amount:Number(item.amount||1),unit:String(item.unit||'item'),checked:false,recipe_title:String(input.recipeTitle||'Recipe')}});
+          added++;
+        }
+      }
+      sendJson(res,{added,merged}); return true;
+    }
+    if (path.startsWith('/api/grocery/') && req.method === 'PUT') {
+      const id=path.split('/').pop();
+      const current=(await supabaseJson('/rest/v1/grocery_items?select=*&id=eq.'+esc(id)+'&user_id=eq.'+esc(uid)+'&limit=1',{token}))?.[0];
+      if(!current){sendJson(res,{error:'Grocery item not found.'},404);return true;}
+      const checked=Boolean(input.checked);
+      await supabaseJson('/rest/v1/grocery_items?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'PATCH',token,body:{checked,updated_at:new Date().toISOString()}});
+      let purchaseRecorded=false;
+      if(checked && !current.checked){
+        const stamp=new Date().toISOString();
+        await supabaseJson('/rest/v1/purchase_history',{method:'POST',token,body:{user_id:uid,name:current.name,quantity:Number(current.amount||1),unit:current.unit||'item',source:'Grocery',purchased_at:stamp}});
+        await supabaseJson('/rest/v1/inventory_items',{method:'POST',token,body:{user_id:uid,name:current.name,quantity:Number(current.amount||1),unit:current.unit||'item',purchased_at:stamp,metadata:{source:'Grocery',price:0}}});
+        purchaseRecorded=true;
+      }
+      sendJson(res,{ok:true,purchaseRecorded}); return true;
+    }
+    if (path.startsWith('/api/grocery/') && req.method === 'DELETE') {
+      const id=path.split('/').pop();
+      await supabaseJson('/rest/v1/grocery_items?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'DELETE',token});
+      sendJson(res,{ok:true}); return true;
+    }
+
+    if (path === '/api/plans' && req.method === 'GET') {
+      const rows=await supabaseJson('/rest/v1/meal_plans?select=id,title,plan_date,plan_time,servings,notes&user_id=eq.'+esc(uid)+'&order=plan_date.asc',{token});
+      sendJson(res,{items:(rows||[]).map(r=>({id:r.id,title:r.title,date:r.plan_date,time:r.plan_time||'18:30',servings:Number(r.servings||1),notes:r.notes||''}))}); return true;
+    }
+    if (path === '/api/plans' && req.method === 'POST') {
+      const rows=await supabaseJson('/rest/v1/meal_plans',{method:'POST',token,prefer:'return=representation',body:{user_id:uid,title:String(input.title||'Meal'),plan_date:String(input.date||new Date().toISOString().slice(0,10)),plan_time:String(input.time||'18:30'),servings:Number(input.servings||1),notes:String(input.notes||'')}});
+      sendJson(res,{item:rows?.[0]||null},201); return true;
+    }
+    if (path.startsWith('/api/plans/') && req.method === 'DELETE') {
+      const id=path.split('/').pop(); await supabaseJson('/rest/v1/meal_plans?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'DELETE',token}); sendJson(res,{ok:true}); return true;
+    }
+
+    if (path === '/api/inventory' && req.method === 'GET') {
+      const rows=await supabaseJson('/rest/v1/inventory_items?select=id,name,quantity,unit,expires_at,purchased_at,metadata,created_at&user_id=eq.'+esc(uid)+'&order=created_at.desc',{token});
+      sendJson(res,{items:(rows||[]).map(r=>({id:r.id,name:r.name,quantity:Number(r.quantity||0),unit:r.unit||'item',purchaseDate:r.purchased_at?String(r.purchased_at).slice(0,10):'',expirationDate:r.expires_at||'',source:r.metadata?.source||'Manual',price:Number(r.metadata?.price||0)}))}); return true;
+    }
+    if (path === '/api/inventory' && req.method === 'POST') {
+      const purchased=input.purchaseDate?new Date(String(input.purchaseDate)+'T12:00:00Z').toISOString():new Date().toISOString();
+      const rows=await supabaseJson('/rest/v1/inventory_items',{method:'POST',token,prefer:'return=representation',body:{user_id:uid,name:String(input.name||'').trim(),quantity:Number(input.quantity||1),unit:String(input.unit||'item'),expires_at:input.expirationDate||null,purchased_at:purchased,metadata:{source:String(input.source||'Manual'),price:Number(input.price||0)}}});
+      sendJson(res,{item:rows?.[0]||null},201); return true;
+    }
+    if (path.startsWith('/api/inventory/') && req.method === 'PUT') {
+      const id=path.split('/').pop(); const patch={};
+      if(input.name!==undefined)patch.name=String(input.name);
+      if(input.quantity!==undefined)patch.quantity=Number(input.quantity);
+      if(input.unit!==undefined)patch.unit=String(input.unit);
+      if(input.expirationDate!==undefined)patch.expires_at=input.expirationDate||null;
+      patch.updated_at=new Date().toISOString();
+      await supabaseJson('/rest/v1/inventory_items?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'PATCH',token,body:patch}); sendJson(res,{ok:true}); return true;
+    }
+    if (path.startsWith('/api/inventory/') && req.method === 'DELETE') {
+      const id=path.split('/').pop(); await supabaseJson('/rest/v1/inventory_items?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'DELETE',token}); sendJson(res,{ok:true}); return true;
+    }
+    if (path === '/api/inventory/receipt' && req.method === 'POST') {
+      sendJson(res,{added:0,warning:'Receipt OCR is not yet migrated to the Railway/Supabase account backend.'}); return true;
+    }
+
+    if (path === '/api/purchases' && req.method === 'GET') {
+      const rows=await supabaseJson('/rest/v1/purchase_history?select=id,name,quantity,unit,purchased_at,source&user_id=eq.'+esc(uid)+'&order=purchased_at.desc',{token});
+      sendJson(res,{items:(rows||[]).map(r=>({id:r.id,name:r.name,quantity:Number(r.quantity||0),unit:r.unit||'item',purchaseDate:String(r.purchased_at).slice(0,10),recordedAt:r.purchased_at,source:r.source||'Grocery'}))}); return true;
+    }
+
+    if (path === '/api/nutrition-log' && req.method === 'GET') {
+      const rows=await supabaseJson('/rest/v1/nutrition_log?select=id,name,log_date,meal,calories,carbs_g,source,created_at&user_id=eq.'+esc(uid)+'&order=created_at.desc',{token});
+      sendJson(res,{items:(rows||[]).map(r=>({id:r.id,name:r.name,date:r.log_date,meal:r.meal,calories:Number(r.calories||0),carbsG:Number(r.carbs_g||0),source:r.source,createdAt:r.created_at}))}); return true;
+    }
+    if (path === '/api/nutrition-log' && req.method === 'POST') {
+      const rows=await supabaseJson('/rest/v1/nutrition_log',{method:'POST',token,prefer:'return=representation',body:{user_id:uid,name:String(input.name||'').trim(),log_date:String(input.date||new Date().toISOString().slice(0,10)),meal:String(input.meal||'Meal'),calories:Number(input.calories||0),carbs_g:Number(input.carbsG||0),source:String(input.source||'Manual')}});
+      sendJson(res,{item:rows?.[0]||null},201); return true;
+    }
+    if (path.startsWith('/api/nutrition-log/') && req.method === 'DELETE') {
+      const id=path.split('/').pop(); await supabaseJson('/rest/v1/nutrition_log?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'DELETE',token}); sendJson(res,{ok:true}); return true;
+    }
+
+    if (path === '/api/spending' && req.method === 'GET') {
+      const rows=await supabaseJson('/rest/v1/spending_entries?select=id,name,category,amount,spend_date,kind,source,note,created_at&user_id=eq.'+esc(uid)+'&order=spend_date.desc',{token});
+      sendJson(res,{items:(rows||[]).map(r=>({id:r.id,name:r.name,category:r.category,amount:Number(r.amount||0),date:r.spend_date,kind:r.kind,source:r.source,note:r.note,createdAt:r.created_at}))}); return true;
+    }
+    if (path === '/api/spending' && req.method === 'POST') {
+      const rows=await supabaseJson('/rest/v1/spending_entries',{method:'POST',token,prefer:'return=representation',body:{user_id:uid,name:String(input.name||'').trim(),category:String(input.category||'Other'),amount:Number(input.amount||0),spend_date:String(input.date||new Date().toISOString().slice(0,10)),kind:input.kind==='planned'?'planned':'actual',source:String(input.source||'Manual'),note:String(input.note||'')}});
+      sendJson(res,{item:rows?.[0]||null},201); return true;
+    }
+    if (path.startsWith('/api/spending/') && req.method === 'DELETE') {
+      const id=path.split('/').pop(); await supabaseJson('/rest/v1/spending_entries?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'DELETE',token}); sendJson(res,{ok:true}); return true;
+    }
+
+    if (path === '/api/events' && req.method === 'GET') {
+      const rows=await supabaseJson('/rest/v1/event_plans?select=*&user_id=eq.'+esc(uid)+'&order=created_at.desc',{token});
+      sendJson(res,{items:(rows||[]).map(r=>({id:r.id,title:r.title,eventType:r.event_type,guests:r.guests,date:r.event_date||'',location:r.location,serviceStyle:r.service_style,cateringTier:r.catering_tier,budget:Number(r.budget||0),notes:r.notes,createdAt:r.created_at}))}); return true;
+    }
+    if (path === '/api/events' && req.method === 'POST') {
+      const rows=await supabaseJson('/rest/v1/event_plans',{method:'POST',token,prefer:'return=representation',body:{user_id:uid,title:String(input.title||'Event'),event_type:String(input.eventType||'Other'),guests:Number(input.guests||1),event_date:input.date||null,location:String(input.location||''),service_style:String(input.serviceStyle||'Buffet'),catering_tier:String(input.cateringTier||''),budget:Number(input.budget||0),notes:String(input.notes||'')}});
+      sendJson(res,{item:rows?.[0]||null},201); return true;
+    }
+    if (path.startsWith('/api/events/') && req.method === 'DELETE') {
+      const id=path.split('/').pop(); await supabaseJson('/rest/v1/event_plans?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'DELETE',token}); sendJson(res,{ok:true}); return true;
+    }
+
+    if (path === '/api/family/profile' && req.method === 'POST') {
+      const age=Math.max(1,Math.min(120,Number(input.age||18)));
+      await supabaseJson('/rest/v1/profiles?on_conflict=user_id',{method:'POST',token,prefer:'resolution=merge-duplicates',body:{user_id:uid,display_name:auth.name,age,updated_at:new Date().toISOString()}});
+      sendJson(res,{ok:true}); return true;
+    }
+    if (path === '/api/family/create' && req.method === 'POST') {
+      const age=Math.max(18,Math.min(120,Number(input.age||18)));
+      const code=Math.random().toString(36).slice(2,10).toUpperCase();
+      const familyRows=await supabaseJson('/rest/v1/families',{method:'POST',token,prefer:'return=representation',body:{owner_user_id:uid,name:String(input.name||'Family').trim(),join_code:code}});
+      const family=familyRows?.[0];
+      if(family) await supabaseJson('/rest/v1/household_members',{method:'POST',token,body:{family_id:family.id,user_id:uid,name:auth.name,age,role:'parent',event_approved:true,approval_requested:false}});
+      await supabaseJson('/rest/v1/profiles?on_conflict=user_id',{method:'POST',token,prefer:'resolution=merge-duplicates',body:{user_id:uid,display_name:auth.name,age,updated_at:new Date().toISOString()}});
+      sendJson(res,{ok:true,joinCode:code}); return true;
+    }
+    if (path === '/api/family/join' && req.method === 'POST') {
+      const age=Math.max(1,Math.min(120,Number(input.age||18)));
+      await supabaseJson('/rest/v1/rpc/join_family_by_code',{method:'POST',token,body:{p_code:String(input.code||''),p_age:age,p_name:auth.name}});
+      await supabaseJson('/rest/v1/profiles?on_conflict=user_id',{method:'POST',token,prefer:'resolution=merge-duplicates',body:{user_id:uid,display_name:auth.name,age,updated_at:new Date().toISOString()}});
+      sendJson(res,{ok:true}); return true;
+    }
+    if (path === '/api/family/request-event' && req.method === 'POST') {
+      await supabaseJson('/rest/v1/household_members?user_id=eq.'+esc(uid),{method:'PATCH',token,body:{approval_requested:true}});
+      sendJson(res,{ok:true}); return true;
+    }
+    if (path.startsWith('/api/family/members/') && path.endsWith('/approval') && req.method === 'PUT') {
+      const parts=path.split('/'); const id=parts[4];
+      await supabaseJson('/rest/v1/household_members?id=eq.'+esc(id),{method:'PATCH',token,body:{event_approved:Boolean(input.approved),approval_requested:false}});
+      sendJson(res,{ok:true}); return true;
+    }
+    if (path === '/api/family' && req.method === 'GET') {
+      const profile=(await supabaseJson('/rest/v1/profiles?select=age&user_id=eq.'+esc(uid)+'&limit=1',{token}))?.[0] || null;
+      const current=(await supabaseJson('/rest/v1/household_members?select=*&user_id=eq.'+esc(uid)+'&limit=1',{token}))?.[0] || null;
+      if(!current){
+        const age=Number(profile?.age||18);
+        sendJson(res,{profile:profile?{age}:null,family:null,currentMember:null,members:[],canEventPlan:age>=16,eventReason:age>=16?'Your account is old enough for Event Planning.':'Join a family and request parent or guardian approval.'});
+        return true;
+      }
+      const family=(await supabaseJson('/rest/v1/families?select=id,name,join_code,owner_user_id&id=eq.'+esc(current.family_id)+'&limit=1',{token}))?.[0] || null;
+      const members=await supabaseJson('/rest/v1/household_members?select=*&family_id=eq.'+esc(current.family_id)+'&order=joined_at.asc',{token});
+      const mapMember=m=>({id:m.id,userId:m.user_id,name:m.name,age:Number(m.age||18),role:m.role,eventApproved:Boolean(m.event_approved),approvalRequested:Boolean(m.approval_requested),joinedAt:m.joined_at});
+      const me=mapMember(current); const can=me.age>=16 || me.eventApproved;
+      sendJson(res,{profile:profile?{age:Number(profile.age)}:{age:me.age},family:family?{id:family.id,name:family.name,...(['parent','guardian'].includes(me.role)?{joinCode:family.join_code}:{})}:null,currentMember:me,members:(members||[]).map(mapMember),canEventPlan:can,eventReason:can?'Event Planning access is available.':'A parent or guardian must approve Event Planning for this account.'});
+      return true;
+    }
+  } catch (e) {
+    console.error('RecipeCost private API error',path,e);
+    sendJson(res,{error:e.message || 'Private account request failed.'},e.status || 500);
+    return true;
+  }
+  return false;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const path = (req.url || '').split('?')[0];
+    if (req.method === 'GET' && path === '/account') { res.statusCode=200; res.setHeader('content-type','text/html; charset=utf-8'); res.setHeader('cache-control','no-store'); res.end(accountPage()); return; }
     if (req.method === 'GET' && path === '/seasonal') { res.statusCode = 200; res.setHeader('content-type','text/html; charset=utf-8'); res.end(seasonalPage()); return; }
     if (req.method === 'GET' && path === '/railway-debug/auth-bundle') {
       const asset = await fetch(upstreamOrigin + '/assets/index-C1-t6RJF.js');
@@ -401,6 +684,9 @@ const server = http.createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
+
+    if (await handleAccountAuth(req,res,path,body)) return;
+    if (await handlePrivateApi(req,res,path,body)) return;
 
     if (req.method === 'POST' && (path === '/api/visual' || path === '/railway-api/visual')) {
       let input = {};
@@ -461,6 +747,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const contentType = upstream.headers.get('content-type') || '';
+    if ((contentType.includes('javascript') || path.endsWith('.js')) && path.includes('/assets/')) { let js=await upstream.text(); js=rewriteAuthBundle(js); res.setHeader('cache-control','no-store'); res.end(js); return; }
     if (contentType.includes('text/html')) {
       let text = await upstream.text();
       text = text.replaceAll(upstreamOrigin, '');
