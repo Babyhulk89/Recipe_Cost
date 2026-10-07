@@ -35,6 +35,47 @@ function proteinName(value = 'Open choice', dietary = []) {
   return String(value);
 }
 
+
+function currentSeason(month = new Date().getMonth() + 1) {
+  if ([12, 1, 2].includes(month)) return 'Winter';
+  if ([3, 4, 5].includes(month)) return 'Spring';
+  if ([6, 7, 8].includes(month)) return 'Summer';
+  return 'Fall';
+}
+
+function seasonalDefaults(season) {
+  const map = {
+    Spring: ['asparagus','peas','spinach','strawberries','radishes','fresh herbs','lemon'],
+    Summer: ['tomatoes','corn','zucchini','peaches','berries','watermelon','fresh basil'],
+    Fall: ['pumpkin','butternut squash','apples','sweet potatoes','mushrooms','cranberries','sage'],
+    Winter: ['cabbage','kale','citrus','potatoes','carrots','parsnips','beans']
+  };
+  return map[season] || map.Fall;
+}
+
+function seasonalPage() {
+  const season = currentSeason();
+  const seasonalJson = JSON.stringify({
+    Spring:['asparagus','peas','spinach','strawberries','radishes','fresh herbs','lemon'],
+    Summer:['tomatoes','corn','zucchini','peaches','berries','watermelon','fresh basil'],
+    Fall:['pumpkin','butternut squash','apples','sweet potatoes','mushrooms','cranberries','sage'],
+    Winter:['cabbage','kale','citrus','potatoes','carrots','parsnips','beans']
+  });
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Seasonal Kitchen | RecipeCost</title>' +
+  '<style>:root{font-family:Inter,system-ui,sans-serif;color:#24123a;background:#faf7ff}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#faf7ff,#fff)}header{padding:28px 20px;background:#24123a;color:white}header a{color:white;text-decoration:none}.wrap{max-width:1100px;margin:auto;padding:28px 20px}.hero{display:flex;justify-content:space-between;gap:20px;align-items:end;flex-wrap:wrap}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;color:#7c3aed}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin:22px 0}.card{background:white;border:1px solid #eadff7;border-radius:18px;padding:18px;box-shadow:0 8px 30px rgba(68,32,91,.08)}.card h3{margin:4px 0 8px}.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid #d7c4ec;background:#fff;padding:8px 10px;border-radius:999px;cursor:pointer}.chip.active{background:#7c3aed;color:#fff;border-color:#7c3aed}label{display:grid;gap:6px;font-weight:700}select,input{padding:11px;border:1px solid #d7c4ec;border-radius:10px;background:white}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}button.primary{background:#7c3aed;color:white;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer}.result{margin-top:24px}.ingredients,.steps{display:grid;gap:8px}.row{padding:10px 12px;border-radius:10px;background:#f8f3fc}.muted{color:#695b74}.season{font-weight:800;color:#7c3aed}</style></head><body>' +
+  '<header><div class="wrap"><a href="/">← RecipeCost Studio</a><h1>Seasonal Kitchen</h1><p>Seasonal meals, snacks, and soups in one place.</p></div></header><main class="wrap">' +
+  '<div class="hero"><div><span class="eyebrow">SEASONAL EATERY</span><h2>Cook with the season</h2><p class="muted">Current seasonal focus: <span class="season">' + season + '</span></p></div></div>' +
+  '<div class="grid"><section class="card"><span class="eyebrow">MEALS</span><h3>Seasonal Eats</h3><p>Breakfasts, lunches, dinners, bowls, casseroles, grilled meals, and comfort food around seasonal produce.</p></section><section class="card"><span class="eyebrow">SNACKS</span><h3>Seasonal Snacks</h3><p>Fruit snacks, baked bites, dips, bars, crunchy snacks, freezer snacks, and party snacks using seasonal ingredients.</p></section><section class="card"><span class="eyebrow">SOUPS</span><h3>Soup Kitchen</h3><p>Broth-based, creamy, chowder, bisque, stew, chili, noodle soup, bean soup, vegetable soup, gumbo, and more.</p></section></div>' +
+  '<section class="card"><div class="grid">' +
+  '<label>Category<select id="category"><option>Seasonal Meal</option><option>Seasonal Snack</option><option>Soup</option></select></label>' +
+  '<label>Season<select id="season"><option>Spring</option><option>Summer</option><option>Fall</option><option>Winter</option></select></label>' +
+  '<label>Style<select id="style"><option>Chef choice</option><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Sweet snack</option><option>Savory snack</option><option>High-protein snack</option><option>Fruit-based snack</option><option>Baked snack</option><option>No-cook snack</option><option>Party snack</option><option>Broth-based soup</option><option>Creamy soup</option><option>Vegetable soup</option><option>Bean soup</option><option>Noodle soup</option><option>Chicken soup</option><option>Seafood soup</option><option>Chowder</option><option>Bisque</option><option>Stew</option><option>Chili</option><option>Gumbo</option><option>Ramen-style</option><option>Pho-style</option><option>Tom yum-style</option><option>Lentil soup</option><option>Potato soup</option></select></label>' +
+  '<label>Cuisine<select id="cuisine"><option>Global fusion</option><option>American</option><option>Southern</option><option>Creole</option><option>Cajun</option><option>Mexican</option><option>Italian</option><option>Caribbean</option><option>West African</option><option>Ethiopian</option><option>Indian</option><option>Japanese</option><option>Korean</option><option>Filipino</option><option>Vietnamese</option><option>Mediterranean</option></select></label>' +
+  '<label>Servings<input id="servings" type="number" min="1" max="100000" value="4"/></label></div>' +
+  '<p class="muted">Seasonal ingredient ideas</p><div id="seasonFoods" class="chips"></div><div class="actions"><button class="primary" id="generate">Generate seasonal recipe</button></div></section><section id="result" class="result"></section></main>' +
+  '<script>const seasonFoods=' + seasonalJson + ';const selected=new Set();const seasonEl=document.getElementById("season");seasonEl.value=' + JSON.stringify(season) + ';function paintFoods(){const box=document.getElementById("seasonFoods");box.innerHTML="";(seasonFoods[seasonEl.value]||[]).forEach(food=>{const b=document.createElement("button");b.className="chip"+(selected.has(food)?" active":"");b.textContent=food;b.onclick=()=>{selected.has(food)?selected.delete(food):selected.add(food);paintFoods()};box.appendChild(b)})}seasonEl.onchange=()=>{selected.clear();paintFoods()};paintFoods();document.getElementById("generate").onclick=async()=>{const category=document.getElementById("category").value,style=document.getElementById("style").value,season=seasonEl.value;const recipeType=category==="Seasonal Snack"?"Snack":"Meal";const body={recipeType,subtype:category==="Soup"?"Soup / "+style:style,cuisine:document.getElementById("cuisine").value,servings:Number(document.getElementById("servings").value||4),foodSelections:[...selected],prompt:season+" "+category+" using seasonal ingredients",season,meal:category==="Soup"?"Soup / salad":style};const r=await fetch("/api/generate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const data=await r.json();const x=data.recipe;const out=document.getElementById("result");out.innerHTML="<section class=\\"card\\"><span class=\\"eyebrow\\">"+season.toUpperCase()+" · "+category.toUpperCase()+"</span><h2>"+x.title+"</h2><p>"+x.summary+"</p><h3>Ingredients</h3><div class=\\"ingredients\\">"+x.ingredients.map(i=>"<div class=\\"row\\"><strong>"+i.amount+" "+i.unit+" "+i.name+"</strong><div class=\\"muted\\">"+i.notes+"</div></div>").join("")+"</div><h3>Instructions</h3><div class=\\"steps\\">"+x.instructions.map(s=>"<div class=\\"row\\"><strong>"+s.step+". "+s.title+"</strong><div>"+s.detail+"</div><div class=\\"muted\\">"+s.tip+"</div></div>").join("")+"</div></section>"};</script></body></html>';
+}
+
 function buildRecipe(input = {}) {
   const servings = clamp(input.servings, 1, 100000);
   const cuisine = input.cuisine || 'Global fusion';
@@ -43,7 +84,9 @@ function buildRecipe(input = {}) {
   const recipeType = input.recipeType || 'Meal';
   const subtype = input.subtype || input.meal || recipeType;
   const prep = input.prepStyle || 'Not meal prep';
-  const selectedFoods = Array.isArray(input.foodSelections) ? input.foodSelections.slice(0, 8) : [];
+  const season = input.season || currentSeason();
+  let selectedFoods = Array.isArray(input.foodSelections) ? input.foodSelections.slice(0, 8) : [];
+  if (!selectedFoods.length && String(input.prompt || '').toLowerCase().includes('seasonal')) selectedFoods = seasonalDefaults(season).slice(0, 5);
   const allergyText = Array.isArray(input.allergies) && input.allergies.length ? input.allergies.join(', ') : 'none';
   const scale = Math.max(servings / 4, 0.25);
   const amount = (n) => Math.round(n * scale * 100) / 100;
@@ -76,7 +119,8 @@ function buildRecipe(input = {}) {
   }
 
   const isSnack = recipeType === 'Snack';
-  const title = `${cuisine} ${protein} ${isSnack ? 'Snack' : subtype}`;
+  const isSoup = String(subtype).toLowerCase().includes('soup') || String(input.meal || '').toLowerCase().includes('soup') || String(input.prompt || '').toLowerCase().includes('soup');
+  const title = isSoup ? `${cuisine} ${season} ${protein} Soup` : `${cuisine} ${protein} ${isSnack ? 'Snack' : subtype}`;
   const chosen = selectedFoods.length ? selectedFoods.join(', ') : base.veg;
   return {
     title,
@@ -88,7 +132,8 @@ function buildRecipe(input = {}) {
       : `Serve one balanced portion per person with ${base.starch} and vegetables. Store leftovers promptly.`,
     ingredients: [
       { name: protein, amount: amount(isSnack ? 1 : 2), unit: 'lb', notes: 'or an equivalent dietary-safe substitute' },
-      { name: base.starch, amount: amount(isSnack ? 1 : 2), unit: 'cups', notes: 'adjust to recipe format' },
+      { name: base.starch, amount: amount(isSnack ? 1 : isSoup ? 1 : 2), unit: 'cups', notes: isSoup ? 'use as a soup grain, noodle, or hearty starch if appropriate' : 'adjust to recipe format' },
+      ...(isSoup ? [{ name: 'broth or stock', amount: amount(6), unit: 'cups', notes: 'use vegetable, chicken, seafood, or other diet-appropriate broth' }] : []),
       { name: chosen, amount: amount(3), unit: 'cups', notes: 'use a coherent subset of selected foods' },
       { name: 'cooking oil', amount: amount(2), unit: 'tbsp', notes: 'use an allergy-safe oil' },
       { name: base.flavor, amount: amount(2), unit: 'tbsp', notes: 'season gradually' },
@@ -109,7 +154,7 @@ function buildRecipe(input = {}) {
     instructions: [
       { step: 1, title: 'Prep ingredients', detail: `Cut and measure ${protein}, ${chosen}, and the remaining ingredients.`, tip: `Avoid allergens: ${allergyText}.` },
       { step: 2, title: 'Build flavor', detail: `Heat oil and cook the aromatic vegetables with ${base.flavor} until fragrant.`, tip: 'Season in layers instead of all at once.' },
-      { step: 3, title: 'Cook the centerpiece', detail: `Add ${protein} and cook with the selected method until safely done.`, tip: 'Use a food thermometer for animal proteins.' },
+      { step: 3, title: isSoup ? 'Build the soup' : 'Cook the centerpiece', detail: isSoup ? `Add broth, ${protein}, ${chosen}, and ${base.starch}; simmer until tender and the flavors come together.` : `Add ${protein} and cook with the selected method until safely done.`, tip: isSoup ? 'Simmer gently so vegetables and proteins stay tender.' : 'Use a food thermometer for animal proteins.' },
       { step: 4, title: 'Add sauce and vegetables', detail: `Fold in ${chosen} and ${base.sauce}; cook until the vegetables reach the desired texture.`, tip: 'Keep textures distinct rather than overcooking.' },
       { step: 5, title: 'Finish and serve', detail: `Taste, adjust seasoning, add ${base.garnish}, and serve with ${base.starch}.`, tip: servings >= 50 ? 'Hold hot food at safe service temperature and replenish in batches.' : 'Rest briefly before serving.' }
     ],
@@ -124,6 +169,9 @@ function buildRecipe(input = {}) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    const path = (req.url || '').split('?')[0];
+    if (req.method === 'GET' && path === '/seasonal') { res.statusCode = 200; res.setHeader('content-type','text/html; charset=utf-8'); res.end(seasonalPage()); return; }
+
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
@@ -180,6 +228,8 @@ const server = http.createServer(async (req, res) => {
     if (contentType.includes('text/html')) {
       let text = await upstream.text();
       text = text.replaceAll(upstreamOrigin, '');
+      const seasonalLink = '<a href="/seasonal" style="position:fixed;right:18px;bottom:18px;z-index:99999;background:#7c3aed;color:#fff;padding:12px 16px;border-radius:999px;text-decoration:none;font:700 14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.2)">Seasonal Kitchen · Soups</a>';
+      text = text.replace('</body>', seasonalLink + '</body>');
       res.end(text);
     } else {
       res.end(Buffer.from(await upstream.arrayBuffer()));
