@@ -2,6 +2,32 @@ import http from 'node:http';
 
 const upstreamOrigin = 'https://recipecost-studio-h0fb5u.v2.appdeploy.ai';
 const port = Number(process.env.PORT || 3000);
+const shareToken = process.env.SHARE_TOKEN || '';
+
+function cookieValue(req, name) {
+  const raw = req.headers.cookie || '';
+  const item = raw.split(';').map(v => v.trim()).find(v => v.startsWith(name + '='));
+  return item ? decodeURIComponent(item.slice(name.length + 1)) : '';
+}
+
+function privateAccess(req, res) {
+  if (!shareToken) return true;
+  const url = new URL(req.url || '/', 'https://recipecost.local');
+  const supplied = url.searchParams.get('share') || '';
+  if (supplied === shareToken) {
+    url.searchParams.delete('share');
+    res.statusCode = 302;
+    res.setHeader('set-cookie', 'recipecost_share=' + encodeURIComponent(shareToken) + '; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000');
+    res.setHeader('location', url.pathname + (url.search ? url.search : '') + url.hash);
+    res.end();
+    return false;
+  }
+  if (cookieValue(req, 'recipecost_share') === shareToken) return true;
+  res.statusCode = 403;
+  res.setHeader('content-type', 'text/html; charset=utf-8');
+  res.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Private RecipeCost</title><style>body{font-family:Inter,system-ui;background:#1f1830;color:white;display:grid;place-items:center;min-height:100vh;margin:0}.box{max-width:560px;padding:32px;border:1px solid #5e4a7d;border-radius:20px;background:#2b203f}h1{margin-top:0}p{color:#d9d0e6}</style></head><body><div class="box"><h1>Private RecipeCost Studio</h1><p>This deployment is private. Open it using an authorized RecipeCost share link.</p></div></body></html>');
+  return false;
+}
 
 function rewriteCookie(cookie) {
   return cookie
@@ -61,10 +87,12 @@ function seasonalPage() {
     Fall:['pumpkin','butternut squash','apples','sweet potatoes','mushrooms','cranberries','sage'],
     Winter:['cabbage','kale','citrus','potatoes','carrots','parsnips','beans']
   });
+  const themes = { Spring:['#eefbf1','#fff7fb','#2f7d45'], Summer:['#fff8dc','#eefaff','#d97706'], Fall:['#fff3e6','#f7eadf','#a14f16'], Winter:['#eef5ff','#f8fbff','#44648f'] };
+  const theme = themes[season] || themes.Fall;
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Seasonal Kitchen | RecipeCost</title>' +
-  '<style>:root{font-family:Inter,system-ui,sans-serif;color:#24123a;background:#faf7ff}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#faf7ff,#fff)}header{padding:28px 20px;background:#24123a;color:white}header a{color:white;text-decoration:none}.wrap{max-width:1100px;margin:auto;padding:28px 20px}.hero{display:flex;justify-content:space-between;gap:20px;align-items:end;flex-wrap:wrap}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;color:#7c3aed}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin:22px 0}.card{background:white;border:1px solid #eadff7;border-radius:18px;padding:18px;box-shadow:0 8px 30px rgba(68,32,91,.08)}.card h3{margin:4px 0 8px}.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid #d7c4ec;background:#fff;padding:8px 10px;border-radius:999px;cursor:pointer}.chip.active{background:#7c3aed;color:#fff;border-color:#7c3aed}label{display:grid;gap:6px;font-weight:700}select,input{padding:11px;border:1px solid #d7c4ec;border-radius:10px;background:white}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}button.primary{background:#7c3aed;color:white;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer}.result{margin-top:24px}.ingredients,.steps{display:grid;gap:8px}.row{padding:10px 12px;border-radius:10px;background:#f8f3fc}.muted{color:#695b74}.season{font-weight:800;color:#7c3aed}</style></head><body>' +
+  '<style>:root{font-family:Inter,system-ui,sans-serif;color:#24123a;background:' + theme[0] + '}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,' + theme[0] + ',' + theme[1] + ');min-height:100vh}header{padding:28px 20px;background:#24123a;color:white}header a{color:white;text-decoration:none}.wrap{max-width:1100px;margin:auto;padding:28px 20px}.hero{display:flex;justify-content:space-between;gap:20px;align-items:end;flex-wrap:wrap}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;color:' + theme[2] + '}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin:22px 0}.card{background:white;border:1px solid #eadff7;border-radius:18px;padding:18px;box-shadow:0 8px 30px rgba(68,32,91,.08)}.card h3{margin:4px 0 8px}.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid #d7c4ec;background:#fff;padding:8px 10px;border-radius:999px;cursor:pointer}.chip.active{background:' + theme[2] + ';color:#fff;border-color:' + theme[2] + '}label{display:grid;gap:6px;font-weight:700}select,input{padding:11px;border:1px solid #d7c4ec;border-radius:10px;background:white}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}button.primary{background:' + theme[2] + ';color:white;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer}.result{margin-top:24px}.ingredients,.steps{display:grid;gap:8px}.row{padding:10px 12px;border-radius:10px;background:#f8f3fc}.muted{color:#695b74}.season{font-weight:800;color:' + theme[2] + '}.theme-note{display:inline-block;padding:6px 10px;border-radius:999px;background:#ffffffaa;border:1px solid #ffffff;font-weight:700}</style></head><body>' +
   '<header><div class="wrap"><a href="/">← RecipeCost Studio</a><h1>Seasonal Kitchen</h1><p>Seasonal meals, snacks, and soups in one place.</p></div></header><main class="wrap">' +
-  '<div class="hero"><div><span class="eyebrow">SEASONAL EATERY</span><h2>Cook with the season</h2><p class="muted">Current seasonal focus: <span class="season">' + season + '</span></p></div></div>' +
+  '<div class="hero"><div><span class="eyebrow">SEASONAL EATERY</span><h2>Cook with the season</h2><p class="muted">Current seasonal focus: <span class="season">' + season + '</span> <span class="theme-note">' + season + ' theme active</span></p></div></div>' +
   '<div class="grid"><section class="card"><span class="eyebrow">MEALS</span><h3>Seasonal Eats</h3><p>Breakfasts, lunches, dinners, bowls, casseroles, grilled meals, and comfort food around seasonal produce.</p></section><section class="card"><span class="eyebrow">SNACKS</span><h3>Seasonal Snacks</h3><p>Fruit snacks, baked bites, dips, bars, crunchy snacks, freezer snacks, and party snacks using seasonal ingredients.</p></section><section class="card"><span class="eyebrow">SOUPS</span><h3>Soup Kitchen</h3><p>Broth-based, creamy, chowder, bisque, stew, chili, noodle soup, bean soup, vegetable soup, gumbo, and more.</p></section></div>' +
   '<section class="card"><div class="grid">' +
   '<label>Category<select id="category"><option>Seasonal Meal</option><option>Seasonal Snack</option><option>Soup</option></select></label>' +
@@ -73,7 +101,7 @@ function seasonalPage() {
   '<label>Cuisine<select id="cuisine"><option>Global fusion</option><option>American</option><option>Southern</option><option>Creole</option><option>Cajun</option><option>Mexican</option><option>Italian</option><option>Caribbean</option><option>West African</option><option>Ethiopian</option><option>Indian</option><option>Japanese</option><option>Korean</option><option>Filipino</option><option>Vietnamese</option><option>Mediterranean</option></select></label>' +
   '<label>Servings<input id="servings" type="number" min="1" max="100000" value="4"/></label></div>' +
   '<p class="muted">Seasonal ingredient ideas</p><div id="seasonFoods" class="chips"></div><div class="actions"><button class="primary" id="generate">Generate seasonal recipe</button></div></section><section id="result" class="result"></section></main>' +
-  '<script>const seasonFoods=' + seasonalJson + ';const selected=new Set();const seasonEl=document.getElementById("season");seasonEl.value=' + JSON.stringify(season) + ';function paintFoods(){const box=document.getElementById("seasonFoods");box.innerHTML="";(seasonFoods[seasonEl.value]||[]).forEach(food=>{const b=document.createElement("button");b.className="chip"+(selected.has(food)?" active":"");b.textContent=food;b.onclick=()=>{selected.has(food)?selected.delete(food):selected.add(food);paintFoods()};box.appendChild(b)})}seasonEl.onchange=()=>{selected.clear();paintFoods()};paintFoods();document.getElementById("generate").onclick=async()=>{const category=document.getElementById("category").value,style=document.getElementById("style").value,season=seasonEl.value;const recipeType=category==="Seasonal Snack"?"Snack":"Meal";const body={recipeType,subtype:category==="Soup"?"Soup / "+style:style,cuisine:document.getElementById("cuisine").value,servings:Number(document.getElementById("servings").value||4),foodSelections:[...selected],prompt:season+" "+category+" using seasonal ingredients",season,meal:category==="Soup"?"Soup / salad":style};const r=await fetch("/api/generate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const data=await r.json();const x=data.recipe;const out=document.getElementById("result");out.innerHTML="<section class=\\"card\\"><span class=\\"eyebrow\\">"+season.toUpperCase()+" · "+category.toUpperCase()+"</span><h2>"+x.title+"</h2><p>"+x.summary+"</p><h3>Ingredients</h3><div class=\\"ingredients\\">"+x.ingredients.map(i=>"<div class=\\"row\\"><strong>"+i.amount+" "+i.unit+" "+i.name+"</strong><div class=\\"muted\\">"+i.notes+"</div></div>").join("")+"</div><h3>Instructions</h3><div class=\\"steps\\">"+x.instructions.map(s=>"<div class=\\"row\\"><strong>"+s.step+". "+s.title+"</strong><div>"+s.detail+"</div><div class=\\"muted\\">"+s.tip+"</div></div>").join("")+"</div></section>"};</script></body></html>';
+  '<script>const seasonFoods=' + seasonalJson + ';const selected=new Set();const seasonEl=document.getElementById("season");seasonEl.value=' + JSON.stringify(season) + ';function paintFoods(){const box=document.getElementById("seasonFoods");box.innerHTML="";(seasonFoods[seasonEl.value]||[]).forEach(food=>{const b=document.createElement("button");b.className="chip"+(selected.has(food)?" active":"");b.textContent=food;b.onclick=()=>{selected.has(food)?selected.delete(food):selected.add(food);paintFoods()};box.appendChild(b)})}seasonEl.onchange=()=>{selected.clear();paintFoods()};paintFoods();document.getElementById("generate").onclick=async()=>{const category=document.getElementById("category").value,style=document.getElementById("style").value,season=seasonEl.value;const recipeType=category==="Seasonal Snack"?"Snack":"Meal";const body={recipeType,subtype:category==="Soup"?"Soup / "+style:style,cuisine:document.getElementById("cuisine").value,servings:Number(document.getElementById("servings").value||4),foodSelections:[...selected],prompt:season+" "+category+" using seasonal ingredients",season,meal:category==="Soup"?"Soup / salad":style};const r=await fetch("/railway-api/generate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const data=await r.json();const x=data.recipe;const out=document.getElementById("result");out.innerHTML="<section class=\\"card\\"><span class=\\"eyebrow\\">"+season.toUpperCase()+" · "+category.toUpperCase()+"</span><h2>"+x.title+"</h2><p>"+x.summary+"</p><h3>Ingredients</h3><div class=\\"ingredients\\">"+x.ingredients.map(i=>"<div class=\\"row\\"><strong>"+i.amount+" "+i.unit+" "+i.name+"</strong><div class=\\"muted\\">"+i.notes+"</div></div>").join("")+"</div><h3>Instructions</h3><div class=\\"steps\\">"+x.instructions.map(s=>"<div class=\\"row\\"><strong>"+s.step+". "+s.title+"</strong><div>"+s.detail+"</div><div class=\\"muted\\">"+s.tip+"</div></div>").join("")+"</div></section>"};</script></body></html>';
 }
 
 
@@ -198,6 +226,7 @@ function buildRecipe(input = {}) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (!privateAccess(req, res)) return;
     const path = (req.url || '').split('?')[0];
     if (req.method === 'GET' && path === '/seasonal') { res.statusCode = 200; res.setHeader('content-type','text/html; charset=utf-8'); res.end(seasonalPage()); return; }
 
@@ -205,7 +234,7 @@ const server = http.createServer(async (req, res) => {
     for await (const chunk of req) chunks.push(chunk);
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
 
-    if (req.method === 'POST' && path === '/api/visual') {
+    if (req.method === 'POST' && (path === '/api/visual' || path === '/railway-api/visual')) {
       let input = {};
       try { input = body ? JSON.parse(body.toString('utf8')) : {}; } catch {}
       const image = visualFrame(input);
@@ -215,7 +244,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'POST' && path === '/api/generate') {
+    if (req.method === 'POST' && (path === '/api/generate' || path === '/railway-api/generate')) {
       let input = {};
       try { input = body ? JSON.parse(body.toString('utf8')) : {}; } catch {}
       const recipe = buildRecipe(input);
@@ -267,6 +296,8 @@ const server = http.createServer(async (req, res) => {
     if (contentType.includes('text/html')) {
       let text = await upstream.text();
       text = text.replaceAll(upstreamOrigin, '');
+      const railwayGuard = '<script>if("serviceWorker" in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{})}</script>';
+      text = text.replace('</head>', railwayGuard + '</head>');
       const seasonalLink = '<a href="/seasonal" style="position:fixed;right:18px;bottom:18px;z-index:99999;background:#7c3aed;color:#fff;padding:12px 16px;border-radius:999px;text-decoration:none;font:700 14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.2)">Seasonal Kitchen · Soups</a>';
       text = text.replace('</body>', seasonalLink + '</body>');
       res.end(text);
