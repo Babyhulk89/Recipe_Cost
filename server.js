@@ -91,6 +91,10 @@ function rewriteAuthBundle(js) {
     'isSignedIn(){try{const p=JSON.parse(localStorage.getItem("rc_supabase_session")||"null");return!!(p&&p.access_token&&(!se(p.access_token)||p.refresh_token))}catch{return!1}}'
   );
   js = js.replaceAll('https://recipecost-studio-h0fb5u.v2.appdeploy.ai/','https://recipecost-studio-production.up.railway.app/');
+  js = js.replace(
+    'return k.interceptors.request.use(async p=>{const z=await Ae.getAccessToken();return z&&(p.headers=p.headers||{},p.headers.Authorization="Bearer "+z),p}),as.auth=Ae,as.api=k,as.ws={connect:Ce},as.image=je,as.invitesClient=ct,as.notifications=V,as',
+    'return k.defaults.baseURL=window.location.origin,k.interceptors.request.use(async p=>{try{if(typeof p.url==="string"){const u=new URL(p.url,window.location.origin);if(u.pathname.startsWith("/api/"))p.url=u.pathname+u.search}}catch{}const z=await Ae.getAccessToken();return z&&(p.headers=p.headers||{},p.headers.Authorization="Bearer "+z),p}),as.auth=Ae,as.api=k,as.ws={connect:Ce},as.image=je,as.invitesClient=ct,as.notifications=V,as'
+  );
   return js;
 }
 
