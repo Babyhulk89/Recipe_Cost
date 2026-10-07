@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createWorker } from 'tesseract.js';
 
 const upstreamOrigin = 'https://recipecost-studio-h0fb5u.v2.appdeploy.ai';
 const port = Number(process.env.PORT || 3000);
@@ -676,6 +677,71 @@ async function handleAccountAuth(req, res, path, body) {
   return false;
 }
 
+
+let receiptOcrWorkerPromise = null;
+
+async function getReceiptOcrWorker() {
+  if (!receiptOcrWorkerPromise) {
+    receiptOcrWorkerPromise = createWorker('eng').catch((error) => {
+      receiptOcrWorkerPromise = null;
+      throw error;
+    });
+  }
+  return receiptOcrWorkerPromise;
+}
+
+function normalizeReceiptDate(text = '') {
+  const iso = String(text).match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+  if (iso) return iso[1] + '-' + String(iso[2]).padStart(2,'0') + '-' + String(iso[3]).padStart(2,'0');
+  const us = String(text).match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2}|\d{2})\b/);
+  if (us) {
+    const year = us[3].length === 2 ? '20' + us[3] : us[3];
+    return year + '-' + String(us[1]).padStart(2,'0') + '-' + String(us[2]).padStart(2,'0');
+  }
+  return new Date().toISOString().slice(0,10);
+}
+
+function parseReceiptText(text = '') {
+  const lines = String(text).split(/\r?\n/).map(v=>v.replace(/\s+/g,' ').trim()).filter(Boolean);
+  const skip = /\b(total|subtotal|tax|change|cash|credit|debit|visa|mastercard|amex|balance|payment|tender|savings|coupon|receipt|thank|store|phone|www\.|http|address)\b/i;
+  const date = normalizeReceiptDate(text);
+  const candidates = [];
+  for (const line of lines) {
+    if (skip.test(line)) continue;
+    const priceMatch = line.match(/(?:\$?\s*)(\d{1,5}[.,]\d{2})\s*$/);
+    if (!priceMatch) continue;
+    const price = Number(priceMatch[1].replace(',','.'));
+    if (!Number.isFinite(price) || price < 0 || price > 10000) continue;
+    let name = line.slice(0, priceMatch.index).replace(/^[\d#*.\-]+\s*/,'').replace(/\s+[A-Z]?\d{3,}\s*$/,'').trim();
+    let quantity = 1;
+    const qty = name.match(/^(\d+(?:\.\d+)?)\s*[xX@]\s+/);
+    if (qty) {
+      quantity = Math.max(1, Number(qty[1]) || 1);
+      name = name.slice(qty[0].length).trim();
+    }
+    name = name.replace(/\s{2,}/g,' ').replace(/[|]{2,}/g,' ').trim();
+    if (name.length < 2 || /^\d+$/.test(name)) continue;
+    candidates.push({ name:name.slice(0,120), quantity, price:Math.round(price*100)/100 });
+  }
+  const seen = new Set();
+  const items = [];
+  for (const item of candidates) {
+    const key=(item.name.toLowerCase()+'|'+item.price+'|'+item.quantity);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(item);
+    if (items.length >= 60) break;
+  }
+  let merchant = 'Receipt';
+  for (const line of lines.slice(0,8)) {
+    if (line.length >= 3 && line.length <= 80 && !/\d{3}[- )]\d{3}/.test(line) && !/\b(receipt|transaction|cashier|date|time)\b/i.test(line)) {
+      merchant = line.slice(0,80);
+      break;
+    }
+  }
+  return { merchant, purchaseDate:date, items };
+}
+
 async function handlePrivateApi(req, res, path, body) {
   if (path === '/api/grocery-stores' && req.method === 'POST') {
     const auth=authContext(req); if(!auth){sendJson(res,{error:'Please sign in to find grocery stores.'},401);return true;}
@@ -848,7 +914,46 @@ async function handlePrivateApi(req, res, path, body) {
       const id=path.split('/').pop(); await supabaseJson('/rest/v1/inventory_items?id=eq.'+esc(id)+'&user_id=eq.'+esc(uid),{method:'DELETE',token}); sendJson(res,{ok:true}); return true;
     }
     if (path === '/api/inventory/receipt' && req.method === 'POST') {
-      sendJson(res,{added:0,warning:'Receipt OCR is not yet migrated to the Railway/Supabase account backend.'}); return true;
+      const image = String(input.image || '');
+      const mimeType = String(input.mimeType || '');
+      if (!image || !/^image\/(png|jpe?g|webp)$/i.test(mimeType)) {
+        sendJson(res,{error:'A JPG, PNG, or WebP receipt image is required.'},400); return true;
+      }
+      let bytes;
+      try { bytes = Buffer.from(image,'base64'); } catch { bytes = null; }
+      if (!bytes || !bytes.length) { sendJson(res,{error:'Receipt image data could not be read.'},400); return true; }
+      if (bytes.length > 15 * 1024 * 1024) { sendJson(res,{error:'Receipt image is too large. Use an image under 15 MB.'},413); return true; }
+      try {
+        const worker = await getReceiptOcrWorker();
+        const result = await worker.recognize(bytes);
+        const parsed = parseReceiptText(result?.data?.text || '');
+        if (!parsed.items.length) {
+          sendJson(res,{error:'No purchasable item lines could be confidently detected. Try a clearer, straight-on receipt photo.'},422); return true;
+        }
+        const purchaseIso = parsed.purchaseDate + 'T12:00:00.000Z';
+        const inventoryRows = parsed.items.map(item=>({
+          user_id:uid,name:item.name,quantity:item.quantity,unit:'item',purchased_at:purchaseIso,
+          metadata:{source:parsed.merchant,price:item.price,receiptOcr:true}
+        }));
+        const purchaseRows = parsed.items.map(item=>({
+          user_id:uid,name:item.name,quantity:item.quantity,unit:'item',price:item.price,source:parsed.merchant,purchased_at:purchaseIso
+        }));
+        const spendingRows = parsed.items.filter(item=>item.price>0).map(item=>({
+          user_id:uid,name:item.name,category:'Groceries / household',amount:item.price,spend_date:parsed.purchaseDate,
+          kind:'actual',source:parsed.merchant,note:'Receipt OCR'
+        }));
+        await supabaseJson('/rest/v1/inventory_items',{method:'POST',token,body:inventoryRows});
+        await supabaseJson('/rest/v1/purchase_history',{method:'POST',token,body:purchaseRows});
+        if (spendingRows.length) await supabaseJson('/rest/v1/spending_entries',{method:'POST',token,body:spendingRows});
+        sendJson(res,{
+          added:parsed.items.length,merchant:parsed.merchant,purchaseDate:parsed.purchaseDate,
+          spendingAdded:spendingRows.length,ocrConfidence:Number(result?.data?.confidence || 0)
+        });
+      } catch (e) {
+        console.error('Receipt OCR failed',e);
+        sendJson(res,{error:'Receipt could not be read. Try a brighter, sharper photo with the full receipt visible.'},500);
+      }
+      return true;
     }
 
     if (path === '/api/purchases' && req.method === 'GET') {
