@@ -122,6 +122,118 @@ function pickBase(cuisine = 'Any cuisine') {
   return { starch: 'rice, potatoes, grains, or bread', veg: 'seasonal vegetables', flavor: 'garlic, herbs, pepper, and balanced seasoning', sauce: 'pan sauce', garnish: 'fresh herbs' };
 }
 
+function cuisineDishConcept(cuisine = 'Global fusion', protein = 'protein', isSoup = false) {
+  const key = String(cuisine).toLowerCase();
+  const p = String(protein).replace(/\s*\/.*$/,'').trim();
+  const pick = (items) => items[Math.floor(Math.random() * items.length)];
+  if (isSoup) {
+    if (key.includes('creole')) return pick([
+      { title: p + ' Gumbo', style:'traditional', format:'slow-simmered gumbo with a dark roux and trinity' },
+      { title: p + ' Okra Stew', style:'traditional', format:'Creole-style okra and tomato stew' },
+      { title: 'Smoked ' + p + ' Gumbo', style:'creative', format:'gumbo foundation with a smoked centerpiece and charred aromatics' }
+    ]);
+    if (key.includes('cajun')) return pick([
+      { title: p + ' Gumbo', style:'traditional', format:'Cajun-style gumbo with roux, trinity, and layered spice' },
+      { title: p + ' Sauce Piquante', style:'traditional', format:'spicy Louisiana braise with tomato, chile, and herbs' },
+      { title: 'Blackened ' + p + ' Stew', style:'creative', format:'Cajun-spiced stew built from blackened protein and trinity' }
+    ]);
+    if (key.includes('filipino')) return pick([
+      { title: p + ' Sinigang', style:'traditional', format:'sour tamarind-forward soup with vegetables' },
+      { title: p + ' Tinola', style:'traditional', format:'ginger-forward broth with greens and aromatics' },
+      { title: 'Charred ' + p + ' Sinigang', style:'creative', format:'sinigang profile with charred vegetables and a brighter sour finish' }
+    ]);
+    if (key.includes('korean')) return pick([
+      { title: p + ' Jjigae', style:'traditional', format:'Korean-style stew with fermented savory depth' },
+      { title: p + ' Guk', style:'traditional', format:'lighter Korean soup with aromatics and vegetables' },
+      { title: 'Roasted ' + p + ' Gochujang Stew', style:'creative', format:'gochujang stew with roasted vegetables and caramelized edges' }
+    ]);
+    if (key.includes('japanese')) return pick([
+      { title: p + ' Nabe', style:'traditional', format:'Japanese hot-pot style broth with vegetables' },
+      { title: p + ' Miso Soup', style:'traditional', format:'miso-forward broth with seasonal vegetables' },
+      { title: 'Seared ' + p + ' Miso Nabe', style:'creative', format:'hot-pot format with seared protein and miso broth' }
+    ]);
+    if (key.includes('mexican')) return pick([
+      { title: p + ' Pozole', style:'traditional', format:'hominy-rich chile broth with traditional garnishes' },
+      { title: p + ' Caldo', style:'traditional', format:'brothy Mexican soup with vegetables and herbs' },
+      { title: 'Roasted Chile ' + p + ' Pozole', style:'creative', format:'pozole foundation with roasted chile depth and crisp garnishes' }
+    ]);
+    if (key.includes('ethiopian')) return pick([
+      { title: p + ' Wot', style:'traditional', format:'berbere-spiced slow-cooked stew' },
+      { title: p + ' Alicha', style:'traditional', format:'milder turmeric-forward Ethiopian-style stew' },
+      { title: 'Charred ' + p + ' Berbere Stew', style:'creative', format:'berbere stew with a charred centerpiece and fresh herb finish' }
+    ]);
+    return { title:p + ' Soup', style:'creative', format:'seasonal soup built from the selected cuisine flavor structure' };
+  }
+  if (key.includes('filipino')) return pick([
+    { title:p + ' Adobo', style:'traditional', format:'soy-vinegar-garlic braise with bay and black pepper' },
+    { title:p + ' Caldereta', style:'traditional', format:'rich Filipino-style tomato braise with vegetables' },
+    { title:p + ' Inasal', style:'traditional', format:'annatto-citrus grilled preparation with garlic and vinegar' },
+    { title:'Crispy ' + p + ' Adobo', style:'creative', format:'adobo-braised protein finished crisp with a reduced adobo glaze' },
+    { title:'Adobo ' + p + ' Rice Cakes', style:'creative', format:'adobo flavors paired with crisp rice cakes and pickled vegetables' }
+  ]);
+  if (key.includes('korean')) return pick([
+    { title:p + ' Bulgogi', style:'traditional', format:'sweet-savory marinated preparation with pear, soy, garlic, and sesame' },
+    { title:p + ' Dakgalbi', style:'traditional', format:'gochujang-forward skillet with vegetables' },
+    { title:p + ' Bibimbap', style:'traditional', format:'rice bowl with seasoned vegetables, sauce, and a crisped base' },
+    { title:'Gochujang-Glazed ' + p, style:'creative', format:'caramelized gochujang glaze with sesame and fresh scallion' },
+    { title:'Crispy ' + p + ' Ssambap', style:'creative', format:'crisp protein with lettuce wraps, rice, and punchy condiments' }
+  ]);
+  if (key.includes('japanese')) return pick([
+    { title:p + ' Teriyaki', style:'traditional', format:'soy-mirin style glaze with a lacquered finish' },
+    { title:p + ' Donburi', style:'traditional', format:'Japanese rice-bowl format with savory sauce and vegetables' },
+    { title:p + ' Katsu', style:'traditional', format:'crisp cutlet-style preparation with shredded vegetables' },
+    { title:'Miso-Glazed ' + p, style:'creative', format:'miso glaze with roasted seasonal vegetables' },
+    { title:'Crispy ' + p + ' Onigiri Plate', style:'creative', format:'seared rice cakes paired with seasoned protein and pickles' }
+  ]);
+  if (key.includes('mexican')) return pick([
+    { title:p + ' Enchiladas', style:'traditional', format:'rolled tortillas with chile sauce and garnishes' },
+    { title:p + ' Tinga', style:'traditional', format:'tomato-chipotle braise with onion and herbs' },
+    { title:p + ' Mole', style:'traditional', format:'complex chile-spice sauce with layered aromatics' },
+    { title:'Charred ' + p + ' Tostadas', style:'creative', format:'crisp tostadas with charred protein, salsa, and fresh garnishes' },
+    { title:'Mole-Glazed ' + p, style:'creative', format:'roasted protein finished with a concentrated mole glaze' }
+  ]);
+  if (key.includes('italian')) return pick([
+    { title:p + ' Saltimbocca', style:'traditional', format:'quick-seared preparation with herbs and pan sauce' },
+    { title:p + ' Cacciatore', style:'traditional', format:'rustic tomato-herb braise with vegetables' },
+    { title:p + ' Piccata', style:'traditional', format:'bright lemon-caper pan sauce' },
+    { title:'Crispy ' + p + ' Polenta', style:'creative', format:'crisp polenta paired with savory protein and herb sauce' },
+    { title:'Roasted ' + p + ' Agrodolce', style:'creative', format:'sweet-sour Italian glaze with roasted vegetables' }
+  ]);
+  if (key.includes('creole')) return pick([
+    { title:p + ' Creole', style:'traditional', format:'tomato-based Creole sauce with trinity, thyme, and bay' },
+    { title:p + ' Étouffée', style:'traditional', format:'smothered Louisiana preparation with roux and trinity' },
+    { title:p + ' Courtbouillon', style:'traditional', format:'Creole-style tomato and herb braise' },
+    { title:'Blackened ' + p + ' Creole', style:'creative', format:'blackened centerpiece over a tomato-trinity sauce' },
+    { title:'Crispy ' + p + ' Étouffée Cakes', style:'creative', format:'crisp cakes served with an étouffée-inspired sauce' }
+  ]);
+  if (key.includes('cajun')) return pick([
+    { title:p + ' Jambalaya', style:'traditional', format:'one-pot Cajun rice dish with trinity and spice' },
+    { title:p + ' Dirty Rice', style:'traditional', format:'deeply seasoned rice with trinity and savory aromatics' },
+    { title:p + ' Sauce Piquante', style:'traditional', format:'spicy Louisiana braise with chile, tomato, and herbs' },
+    { title:'Blackened ' + p + ' Grits', style:'creative', format:'blackened protein over creamy grits with Cajun pan juices' },
+    { title:'Cajun ' + p + ' Stuffed Peppers', style:'creative', format:'Cajun-spiced filling with rice, trinity, and herbs' }
+  ]);
+  if (key.includes('ethiopian')) return pick([
+    { title:p + ' Tibs', style:'traditional', format:'sautéed Ethiopian-style preparation with aromatics and spice' },
+    { title:p + ' Wot', style:'traditional', format:'slow-cooked berbere stew with layered onions' },
+    { title:p + ' Alicha', style:'traditional', format:'milder turmeric-forward Ethiopian-style preparation' },
+    { title:'Berbere-Roasted ' + p, style:'creative', format:'roasted centerpiece with berbere, greens, and lentils' },
+    { title:'Crispy Injera ' + p + ' Plate', style:'creative', format:'traditional flavor profile presented with crisp injera pieces and bright vegetables' }
+  ]);
+  if (key.includes('puerto')) return pick([
+    { title:p + ' Guisado', style:'traditional', format:'sofrito-based Puerto Rican stew with herbs and tomato' },
+    { title:p + ' Asopao', style:'traditional', format:'soupy rice dish with sofrito and deep savory flavor' },
+    { title:p + ' Pinchos', style:'traditional', format:'grilled skewers with adobo-style seasoning' },
+    { title:'Sofrito-Roasted ' + p, style:'creative', format:'roasted protein finished with concentrated sofrito and citrus' },
+    { title:'Crispy Mofongo ' + p + ' Cups', style:'creative', format:'mofongo-inspired cups filled with seasoned protein and sauce' }
+  ]);
+  return pick([
+    { title:p + ' Skillet', style:'creative', format:'seasonal skillet built from the selected cuisine flavor profile' },
+    { title:'Roasted ' + p, style:'creative', format:'roasted centerpiece with cuisine-specific sauce and vegetables' },
+    { title:'Braised ' + p, style:'traditional', format:'slow-braised preparation with culturally compatible aromatics' }
+  ]);
+}
+
 function proteinName(value = 'Open choice', dietary = []) {
   const diets = Array.isArray(dietary) ? dietary.map(v => String(v).toLowerCase()) : [];
   const requested = String(value || '').trim();
@@ -343,24 +455,12 @@ function buildRecipe(input = {}) {
   }
   const isSoup = String(subtype).toLowerCase().includes('soup') || String(input.meal || '').toLowerCase().includes('soup') || String(input.prompt || '').toLowerCase().includes('soup');
   const cleanProtein = String(protein).replace(/\s*\/.*$/,'').trim();
-  const cuisineKey = String(cuisine).toLowerCase();
-  const foodTitle = isSoup
-    ? `${cleanProtein} Soup`
-    : cuisineKey.includes('filipino') ? `${cleanProtein} Adobo`
-    : cuisineKey.includes('korean') ? `Gochujang ${cleanProtein}`
-    : cuisineKey.includes('japanese') ? `Teriyaki ${cleanProtein}`
-    : cuisineKey.includes('mexican') ? `${cleanProtein} Enchiladas`
-    : cuisineKey.includes('italian') ? `${cleanProtein} Primavera`
-    : cuisineKey.includes('creole') ? `${cleanProtein} Creole`
-    : cuisineKey.includes('cajun') ? `Cajun ${cleanProtein}`
-    : cuisineKey.includes('ethiopian') ? `Berbere ${cleanProtein} Stew`
-    : cuisineKey.includes('puerto') ? `${cleanProtein} Sofrito Stew`
-    : `${cleanProtein} Skillet`;
-  const title = foodTitle;
+  const concept = cuisineDishConcept(cuisine, cleanProtein, isSoup);
+  const title = concept.title;
   const chosen = selectedFoods.length ? selectedFoods.join(', ') : base.veg;
   return {
     title,
-    summary: `A practical ${cuisine} ${recipeType.toLowerCase()} featuring ${protein}, ${chosen}, and ${base.flavor}. Designed for ${servings} serving${servings === 1 ? '' : 's'}.`,
+    summary: `A ${concept.style} ${cuisine} dish built around ${concept.format}. It features ${protein}, ${chosen}, and ${base.flavor}, scaled for ${servings} serving${servings === 1 ? '' : 's'}.`,
     cuisine, servings, prepMinutes: isSnack ? 10 : 20, cookMinutes: isSnack ? 15 : 30, difficulty: input.skill || 'Beginner friendly',
     tasteSummary: `${base.flavor}; balanced with ${base.sauce}.`,
     portionGuide: servings >= 50
@@ -399,7 +499,7 @@ function buildRecipe(input = {}) {
       { title: 'Large-batch scaling', detail: servings >= 50 ? 'Divide total quantities by actual pan, grill, smoker, or pot capacity; schedule multiple production waves.' : 'Use normal household batch sizes.' }
     ],
     equipment: ['chef knife', 'cutting board', 'large skillet or pot', 'measuring tools', ...(servings >= 50 ? ['hotel pans or batch containers', 'food-safe holding equipment'] : [])],
-    tags: [recipeType, subtype, cuisine, prep, ...(Array.isArray(input.dietary) ? input.dietary : [])]
+    tags: [recipeType, subtype, cuisine, prep, concept.style === 'traditional' ? 'Traditional' : 'Creative traditional', ...(Array.isArray(input.dietary) ? input.dietary : [])]
   };
 }
 
