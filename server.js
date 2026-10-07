@@ -75,6 +75,10 @@ function rewriteAuthBundle(js) {
     'async signIn(p){location.href="/account";return new Promise(()=>{});var z='
   );
   js = js.replace(
+    'async getUser(){const p=await this.getAccessToken();return p?ie(p):null}',
+    'async getUser(){try{const p=await this.getAccessToken();if(!p)return null;const z=rn(p);return z?{userId:z.sub,email:z.email,name:z.name||z.user_metadata?.full_name||z.email?.split("@")[0],picture:z.picture||z.user_metadata?.avatar_url,scope:z.scope||""}:null}catch{return null}}'
+  );
+  js = js.replace(
     'async getAccessToken(){const p=fn();return!p||!p.accessToken?null:se(p.accessToken)?await ze():p.accessToken}',
     'async getAccessToken(){try{let p=JSON.parse(localStorage.getItem("rc_supabase_session")||"null");if(!p||!p.access_token)return null;if(!se(p.access_token))return p.access_token;if(!p.refresh_token)return null;const z=await fetch(' + sbUrl + '+"/auth/v1/token?grant_type=refresh_token",{method:"POST",headers:{"apikey":' + sbKey + ',"Content-Type":"application/json"},body:JSON.stringify({refresh_token:p.refresh_token})});if(!z.ok){localStorage.removeItem("rc_supabase_session");return null}p=await z.json();localStorage.setItem("rc_supabase_session",JSON.stringify(p));return p.access_token}catch{return null}}'
   );
