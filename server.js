@@ -53,6 +53,33 @@ function seasonalDefaults(season) {
   return map[season] || map.Fall;
 }
 
+
+function seasonalMediaSvg(title, season, animated = false) {
+  const themes = {
+    Spring:{bg1:'#eefbf1',bg2:'#fff7fb',accent:'#2f7d45',glow:'#f2c7dc'},
+    Summer:{bg1:'#fff7d6',bg2:'#e9f8ff',accent:'#d97706',glow:'#8fd3ff'},
+    Fall:{bg1:'#fff0df',bg2:'#f7e4d3',accent:'#a14f16',glow:'#d69b62'},
+    Winter:{bg1:'#edf5ff',bg2:'#f9fcff',accent:'#48658d',glow:'#b9d8f5'}
+  };
+  const t=themes[season] || themes.Fall;
+  const safe=escapeXml(title || 'Seasonal Recipe');
+  const motion=animated
+    ? '<animate attributeName="cy" values="330;292;330" dur="2s" repeatCount="indefinite"/>'
+    : '';
+  const motion2=animated
+    ? '<animate attributeName="cx" values="675;720;675" dur="2.6s" repeatCount="indefinite"/>'
+    : '';
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="' + t.bg1 + '"/><stop offset="1" stop-color="' + t.bg2 + '"/></linearGradient></defs>' +
+    '<rect width="1200" height="720" fill="url(#g)"/><circle cx="950" cy="130" r="170" fill="' + t.glow + '" opacity=".55"/>' +
+    '<circle cx="600" cy="390" r="245" fill="#fff" stroke="#e7dfd7" stroke-width="12"/><circle cx="600" cy="390" r="150" fill="' + t.accent + '" opacity=".14"/>' +
+    '<circle cx="520" cy="330" r="48" fill="#d98c4f">' + motion + '</circle><circle cx="675" cy="410" r="58" fill="#7fa85e">' + motion2 + '</circle><circle cx="665" cy="315" r="40" fill="#e8b25c"/><circle cx="535" cy="450" r="38" fill="#b76e5f"/>' +
+    '<text x="70" y="95" font-family="Inter,Arial,sans-serif" font-size="24" font-weight="800" fill="' + t.accent + '">' + (animated ? 'RECIPECOST COOKING CLIP' : 'RECIPECOST DISH VISUAL') + '</text>' +
+    '<text x="70" y="160" font-family="Inter,Arial,sans-serif" font-size="52" font-weight="900" fill="#24123a">' + safe + '</text>' +
+    (animated ? '<text x="600" y="650" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="25" fill="#5d5364">Prep → cook → finish → serve</text>' : '') +
+    '</svg>';
+}
+
 function seasonalPage() {
   const season = currentSeason();
   const seasonalJson = JSON.stringify({
@@ -73,7 +100,7 @@ function seasonalPage() {
   '<label>Cuisine<select id="cuisine"><option>Global fusion</option><option>American</option><option>Southern</option><option>Creole</option><option>Cajun</option><option>Mexican</option><option>Italian</option><option>Caribbean</option><option>West African</option><option>Ethiopian</option><option>Indian</option><option>Japanese</option><option>Korean</option><option>Filipino</option><option>Vietnamese</option><option>Mediterranean</option></select></label>' +
   '<label>Servings<input id="servings" type="number" min="1" max="100000" value="4"/></label></div>' +
   '<p class="muted">Seasonal ingredient ideas</p><div id="seasonFoods" class="chips"></div><div class="actions"><button class="primary" id="generate">Generate seasonal recipe</button></div></section><section id="result" class="result"></section></main>' +
-  '<script>const seasonFoods=' + seasonalJson + ';const selected=new Set();const seasonEl=document.getElementById("season");seasonEl.value=' + JSON.stringify(season) + ';function updateTheme(){document.body.dataset.season=seasonEl.value;document.querySelector(".season").textContent=seasonEl.value}function paintFoods(){const box=document.getElementById("seasonFoods");box.innerHTML="";(seasonFoods[seasonEl.value]||[]).forEach(food=>{const b=document.createElement("button");b.className="chip"+(selected.has(food)?" active":"");b.textContent=food;b.onclick=()=>{selected.has(food)?selected.delete(food):selected.add(food);paintFoods()};box.appendChild(b)})}seasonEl.onchange=()=>{selected.clear();updateTheme();paintFoods()};updateTheme();paintFoods();document.getElementById("generate").onclick=async()=>{const category=document.getElementById("category").value,style=document.getElementById("style").value,season=seasonEl.value;const recipeType=category==="Seasonal Snack"?"Snack":"Meal";const body={recipeType,subtype:category==="Soup"?"Soup / "+style:style,cuisine:document.getElementById("cuisine").value,servings:Number(document.getElementById("servings").value||4),foodSelections:[...selected],prompt:season+" "+category+" using seasonal ingredients",season,meal:category==="Soup"?"Soup / salad":style};const r=await fetch("/railway-api/generate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const data=await r.json();const x=data.recipe;const out=document.getElementById("result");out.innerHTML="<section class=\\"card\\"><span class=\\"eyebrow\\">"+season.toUpperCase()+" · "+category.toUpperCase()+"</span><h2>"+x.title+"</h2><p>"+x.summary+"</p><h3>Ingredients</h3><div class=\\"ingredients\\">"+x.ingredients.map(i=>"<div class=\\"row\\"><strong>"+i.amount+" "+i.unit+" "+i.name+"</strong><div class=\\"muted\\">"+i.notes+"</div></div>").join("")+"</div><h3>Instructions</h3><div class=\\"steps\\">"+x.instructions.map(s=>"<div class=\\"row\\"><strong>"+s.step+". "+s.title+"</strong><div>"+s.detail+"</div><div class=\\"muted\\">"+s.tip+"</div></div>").join("")+"</div></section>"};</script></body></html>';
+  '<script>const seasonFoods=' + seasonalJson + ';const selected=new Set();const seasonEl=document.getElementById("season");seasonEl.value=' + JSON.stringify(season) + ';function updateTheme(){document.body.dataset.season=seasonEl.value;document.querySelector(".season").textContent=seasonEl.value}function paintFoods(){const box=document.getElementById("seasonFoods");box.innerHTML="";(seasonFoods[seasonEl.value]||[]).forEach(food=>{const b=document.createElement("button");b.className="chip"+(selected.has(food)?" active":"");b.textContent=food;b.onclick=()=>{selected.has(food)?selected.delete(food):selected.add(food);paintFoods()};box.appendChild(b)})}seasonEl.onchange=()=>{selected.clear();updateTheme();paintFoods()};updateTheme();paintFoods();document.getElementById("generate").onclick=async()=>{const category=document.getElementById("category").value,style=document.getElementById("style").value,season=seasonEl.value;const recipeType=category==="Seasonal Snack"?"Snack":"Meal";const body={recipeType,subtype:category==="Soup"?"Soup / "+style:style,cuisine:document.getElementById("cuisine").value,servings:Number(document.getElementById("servings").value||4),foodSelections:[...selected],prompt:season+" "+category+" using seasonal ingredients",season,meal:category==="Soup"?"Soup / salad":style};const r=await fetch("/railway-api/generate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const data=await r.json();const x=data.recipe;const out=document.getElementById("result");out.innerHTML="<section class=\\"card\\"><span class=\\"eyebrow\\">"+season.toUpperCase()+" · "+category.toUpperCase()+"</span><h2>"+x.title+"</h2><div class=\"media-grid\"><div class=\"media-card\"><img src=\"/media/image.svg?title="+encodeURIComponent(x.title)+"&season="+encodeURIComponent(season)+"\" alt=\""+x.title+"\"/><div class=\"media-label\">Dish image</div></div><div class=\"media-card\"><img src=\"/media/clip.svg?title="+encodeURIComponent(x.title)+"&season="+encodeURIComponent(season)+"\" alt=\"Animated cooking clip for "+x.title+"\"/><div class=\"media-label\">Cooking clip</div></div></div><p>"+x.summary+"</p><h3>Ingredients</h3><div class=\\"ingredients\\">"+x.ingredients.map(i=>"<div class=\\"row\\"><strong>"+i.amount+" "+i.unit+" "+i.name+"</strong><div class=\\"muted\\">"+i.notes+"</div></div>").join("")+"</div><h3>Instructions</h3><div class=\\"steps\\">"+x.instructions.map(s=>"<div class=\\"row\\"><strong>"+s.step+". "+s.title+"</strong><div>"+s.detail+"</div><div class=\\"muted\\">"+s.tip+"</div></div>").join("")+"</div></section>"};</script></body></html>';
 }
 
 
@@ -149,7 +176,8 @@ function buildRecipe(input = {}) {
 
   const isSnack = recipeType === 'Snack';
   const isSoup = String(subtype).toLowerCase().includes('soup') || String(input.meal || '').toLowerCase().includes('soup') || String(input.prompt || '').toLowerCase().includes('soup');
-  const title = isSoup ? `${cuisine} ${season} ${protein} Soup` : `${cuisine} ${protein} ${isSnack ? 'Snack' : subtype}`;
+  const cleanProtein = String(protein).replace(/\s*\/.*$/,'').trim();
+  const title = isSoup ? `${cuisine} ${cleanProtein} Soup` : isSnack ? `${cuisine} ${cleanProtein} Bites` : `${cuisine} ${cleanProtein} ${String(subtype).toLowerCase().includes('breakfast') ? 'Breakfast' : String(subtype).toLowerCase().includes('brunch') ? 'Brunch' : 'Skillet'}`;
   const chosen = selectedFoods.length ? selectedFoods.join(', ') : base.veg;
   return {
     title,
@@ -200,6 +228,15 @@ const server = http.createServer(async (req, res) => {
   try {
     const path = (req.url || '').split('?')[0];
     if (req.method === 'GET' && path === '/seasonal') { res.statusCode = 200; res.setHeader('content-type','text/html; charset=utf-8'); res.end(seasonalPage()); return; }
+    if (req.method === 'GET' && (path === '/media/image.svg' || path === '/media/clip.svg')) {
+      const u = new URL(req.url || '/', 'https://recipecost.local');
+      const svg = seasonalMediaSvg(u.searchParams.get('title') || 'Seasonal Recipe', u.searchParams.get('season') || currentSeason(), path === '/media/clip.svg');
+      res.statusCode = 200;
+      res.setHeader('content-type','image/svg+xml; charset=utf-8');
+      res.setHeader('cache-control','no-store');
+      res.end(svg);
+      return;
+    }
     if (req.method === 'GET' && path === '/sw.js') { res.statusCode = 200; res.setHeader('content-type','application/javascript; charset=utf-8'); res.setHeader('cache-control','no-store, max-age=0'); res.end("self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.registration.unregister().then(()=>self.clients.matchAll()).then(cs=>Promise.all(cs.map(c=>c.navigate(c.url))))));"); return; }
 
     const chunks = [];
