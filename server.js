@@ -76,6 +76,35 @@ function seasonalPage() {
   '<script>const seasonFoods=' + seasonalJson + ';const selected=new Set();const seasonEl=document.getElementById("season");seasonEl.value=' + JSON.stringify(season) + ';function paintFoods(){const box=document.getElementById("seasonFoods");box.innerHTML="";(seasonFoods[seasonEl.value]||[]).forEach(food=>{const b=document.createElement("button");b.className="chip"+(selected.has(food)?" active":"");b.textContent=food;b.onclick=()=>{selected.has(food)?selected.delete(food):selected.add(food);paintFoods()};box.appendChild(b)})}seasonEl.onchange=()=>{selected.clear();paintFoods()};paintFoods();document.getElementById("generate").onclick=async()=>{const category=document.getElementById("category").value,style=document.getElementById("style").value,season=seasonEl.value;const recipeType=category==="Seasonal Snack"?"Snack":"Meal";const body={recipeType,subtype:category==="Soup"?"Soup / "+style:style,cuisine:document.getElementById("cuisine").value,servings:Number(document.getElementById("servings").value||4),foodSelections:[...selected],prompt:season+" "+category+" using seasonal ingredients",season,meal:category==="Soup"?"Soup / salad":style};const r=await fetch("/api/generate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const data=await r.json();const x=data.recipe;const out=document.getElementById("result");out.innerHTML="<section class=\\"card\\"><span class=\\"eyebrow\\">"+season.toUpperCase()+" · "+category.toUpperCase()+"</span><h2>"+x.title+"</h2><p>"+x.summary+"</p><h3>Ingredients</h3><div class=\\"ingredients\\">"+x.ingredients.map(i=>"<div class=\\"row\\"><strong>"+i.amount+" "+i.unit+" "+i.name+"</strong><div class=\\"muted\\">"+i.notes+"</div></div>").join("")+"</div><h3>Instructions</h3><div class=\\"steps\\">"+x.instructions.map(s=>"<div class=\\"row\\"><strong>"+s.step+". "+s.title+"</strong><div>"+s.detail+"</div><div class=\\"muted\\">"+s.tip+"</div></div>").join("")+"</div></section>"};</script></body></html>';
 }
 
+
+function escapeXml(value = '') {
+  return String(value).replace(/[&<>"']/g, (ch) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&apos;' }[ch]));
+}
+
+function visualFrame(input = {}) {
+  const title = escapeXml(input.title || 'RecipeCost Cookthrough');
+  const cuisine = escapeXml(input.cuisine || 'RecipeCost');
+  const stepTitle = escapeXml(input.stepTitle || 'Cooking step');
+  const detail = escapeXml(input.stepDetail || 'Follow the recipe instructions for this stage.');
+  const wrapped = String(detail).match(/.{1,58}(?:\s|$)/g)?.slice(0, 5) || [detail];
+  const lines = wrapped.map((line, i) => '<text x="90" y="' + (360 + i * 42) + '" font-family="Inter,Arial,sans-serif" font-size="27" fill="#4b3f53">' + escapeXml(line.trim()) + '</text>').join('');
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">' +
+    '<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7efff"/><stop offset="1" stop-color="#fff7ed"/></linearGradient></defs>' +
+    '<rect width="1280" height="720" fill="url(#bg)"/>' +
+    '<circle cx="1040" cy="170" r="120" fill="#7c3aed" opacity=".10"/>' +
+    '<circle cx="1130" cy="560" r="180" fill="#f59e0b" opacity=".10"/>' +
+    '<rect x="64" y="56" width="1152" height="608" rx="34" fill="#ffffff" stroke="#eadff7" stroke-width="3"/>' +
+    '<text x="90" y="120" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700" fill="#7c3aed">RECIPECOST VISUAL COOKTHROUGH · ' + cuisine + '</text>' +
+    '<text x="90" y="188" font-family="Inter,Arial,sans-serif" font-size="46" font-weight="800" fill="#24123a">' + title + '</text>' +
+    '<line x1="90" y1="225" x2="1190" y2="225" stroke="#eadff7" stroke-width="3"/>' +
+    '<text x="90" y="298" font-family="Inter,Arial,sans-serif" font-size="38" font-weight="800" fill="#24123a">' + stepTitle + '</text>' +
+    lines +
+    '<rect x="90" y="590" width="330" height="46" rx="23" fill="#7c3aed"/>' +
+    '<text x="255" y="621" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="700" fill="#fff">Step-by-step cooking frame</text>' +
+    '</svg>';
+  return { data: Buffer.from(svg, 'utf8').toString('base64'), mimeType: 'image/svg+xml' };
+}
+
 function buildRecipe(input = {}) {
   const servings = clamp(input.servings, 1, 100000);
   const cuisine = input.cuisine || 'Global fusion';
@@ -176,7 +205,17 @@ const server = http.createServer(async (req, res) => {
     for await (const chunk of req) chunks.push(chunk);
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
 
-    if (req.method === 'POST' && (req.url || '').split('?')[0] === '/api/generate') {
+    if (req.method === 'POST' && path === '/api/visual') {
+      let input = {};
+      try { input = body ? JSON.parse(body.toString('utf8')) : {}; } catch {}
+      const image = visualFrame(input);
+      res.statusCode = 200;
+      res.setHeader('content-type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ image }));
+      return;
+    }
+
+    if (req.method === 'POST' && path === '/api/generate') {
       let input = {};
       try { input = body ? JSON.parse(body.toString('utf8')) : {}; } catch {}
       const recipe = buildRecipe(input);
