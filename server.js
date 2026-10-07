@@ -120,10 +120,27 @@ function pickBase(cuisine = 'Any cuisine') {
 
 function proteinName(value = 'Open choice', dietary = []) {
   const diets = Array.isArray(dietary) ? dietary.map(v => String(v).toLowerCase()) : [];
-  if (diets.some(v => v.includes('vegan'))) return 'chickpeas';
-  if (diets.some(v => v.includes('vegetarian'))) return 'tofu';
-  if (String(value).toLowerCase() === 'open choice') return 'chicken';
-  return String(value);
+  const requested = String(value || '').trim();
+  const openChoice = !requested || /^(open choice|any|any protein|chef choice|no preference)$/i.test(requested);
+  const pick = (items) => items[Math.floor(Math.random() * items.length)];
+
+  if (!openChoice) return requested;
+
+  if (diets.some(v => v.includes('vegan'))) {
+    return pick(['tempeh','lentils','black beans','chickpeas','mushrooms','jackfruit','seitan','tofu','white beans','eggplant']);
+  }
+  if (diets.some(v => v.includes('vegetarian'))) {
+    return pick(['tofu','tempeh','eggs','lentils','black beans','chickpeas','mushrooms','halloumi','paneer','white beans']);
+  }
+  if (diets.some(v => v.includes('pescatarian'))) {
+    return pick(['salmon','shrimp','cod','tilapia','tuna','trout','scallops','crab','mahi-mahi','mussels']);
+  }
+
+  return pick([
+    'salmon','shrimp','pork','turkey','lamb','duck','cod','tilapia','tuna',
+    'bison','venison','rabbit','goat','sausage','eggs','tofu','tempeh',
+    'lentils','black beans','chickpeas','mushrooms','jackfruit','chicken'
+  ]);
 }
 
 
