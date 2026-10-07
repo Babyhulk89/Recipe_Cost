@@ -283,6 +283,24 @@ const server = http.createServer(async (req, res) => {
   try {
     const path = (req.url || '').split('?')[0];
     if (req.method === 'GET' && path === '/seasonal') { res.statusCode = 200; res.setHeader('content-type','text/html; charset=utf-8'); res.end(seasonalPage()); return; }
+    if (req.method === 'GET' && path === '/railway-debug/auth-bundle') {
+      const asset = await fetch(upstreamOrigin + '/assets/index-C1-t6RJF.js');
+      const js = await asset.text();
+      const terms = ['signIn','getUser','isSignedIn','signOut','offline_access','popup_blocked'];
+      const snippets = [];
+      for (const term of terms) {
+        let pos = 0;
+        while ((pos = js.indexOf(term, pos)) >= 0 && snippets.length < 120) {
+          snippets.push({ term, text: js.slice(Math.max(0,pos-700), Math.min(js.length,pos+1300)) });
+          pos += term.length;
+        }
+      }
+      res.statusCode = 200;
+      res.setHeader('content-type','application/json; charset=utf-8');
+      res.setHeader('cache-control','no-store');
+      res.end(JSON.stringify({ length:js.length, snippets }));
+      return;
+    }
     if (req.method === 'GET' && (path === '/media/image.svg' || path === '/media/clip.svg')) {
       const u = new URL(req.url || '/', 'https://recipecost.local');
       const svg = seasonalMediaSvg(u.searchParams.get('title') || 'Seasonal Recipe', u.searchParams.get('season') || currentSeason(), path === '/media/clip.svg');
