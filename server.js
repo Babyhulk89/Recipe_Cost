@@ -367,6 +367,62 @@ function buildRecipe(input = {}) {
 }
 
 
+
+function milesBetween(lat1, lon1, lat2, lon2) {
+  const r=3958.7613, d=Math.PI/180;
+  const a=Math.sin((lat2-lat1)*d/2)**2 + Math.cos(lat1*d)*Math.cos(lat2*d)*Math.sin((lon2-lon1)*d/2)**2;
+  return 2*r*Math.asin(Math.sqrt(a));
+}
+
+async function uploadCommunityPhoto(token, userId, photoData, photoMime) {
+  const mime=photoMime==='image/png'?'image/png':'image/jpeg';
+  const ext=mime==='image/png'?'png':'jpg';
+  const path=userId+'/'+Date.now()+'.'+ext;
+  const r=await fetch(supabaseUrl+'/storage/v1/object/community/'+path,{
+    method:'POST',
+    headers:{apikey:supabaseKey,authorization:'Bearer '+token,'content-type':mime,'x-upsert':'false'},
+    body:Buffer.from(String(photoData||''),'base64')
+  });
+  if(!r.ok) throw new Error('Community photo upload failed.');
+  return path;
+}
+
+async function handleCommunityApi(req,res,path,body) {
+  if(path !== '/api/community') return false;
+  if(req.method === 'GET') {
+    let legacy=[];
+    try {
+      const r=await fetch(upstreamOrigin+'/api/community',{headers:{accept:'application/json'}});
+      if(r.ok) legacy=(await r.json())?.items || [];
+    } catch {}
+    let local=[];
+    try {
+      const rows=await supabaseJson('/rest/v1/community_posts?select=id,author_name,recipe_title,note,social_url,photo_path,created_at&order=created_at.desc&limit=40');
+      local=(rows||[]).map(r=>({id:r.id,authorName:r.author_name,recipeTitle:r.recipe_title,note:r.note,socialUrl:r.social_url,photoUrl:r.photo_path?(supabaseUrl+'/storage/v1/object/public/community/'+r.photo_path):'',createdAt:r.created_at}));
+    } catch {}
+    const merged=[...local,...legacy].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,60);
+    sendJson(res,{items:merged}); return true;
+  }
+  if(req.method === 'POST') {
+    const auth=authContext(req);
+    if(!auth){sendJson(res,{error:'Please sign in to post to Community.'},401);return true;}
+    const input=readBody(body);
+    if(!String(input.note||'').trim() && !input.photoData){sendJson(res,{error:'Add a note or photo before posting.'},400);return true;}
+    let socialUrl='';
+    if(String(input.socialUrl||'').trim()){
+      try{const u=new URL(String(input.socialUrl).trim());if(!['http:','https:'].includes(u.protocol))throw new Error();socialUrl=u.toString();}
+      catch{sendJson(res,{error:'Social recipe URL is invalid.'},400);return true;}
+    }
+    try{
+      const photoPath=input.photoData?await uploadCommunityPhoto(auth.token,auth.userId,input.photoData,input.photoMime):'';
+      const rows=await supabaseJson('/rest/v1/community_posts',{method:'POST',token:auth.token,prefer:'return=representation',body:{user_id:auth.userId,author_name:auth.name||'RecipeCost cook',recipe_title:String(input.recipeTitle||'Community recipe').trim()||'Community recipe',note:String(input.note||'').trim(),social_url:socialUrl,photo_path:photoPath}});
+      sendJson(res,{id:rows?.[0]?.id||null},201);
+    }catch(e){sendJson(res,{error:e.message||'Community post could not be saved.'},e.status||500);}
+    return true;
+  }
+  return false;
+}
+
 function readBody(body) {
   try { return body ? JSON.parse(body.toString('utf8')) : {}; } catch { return {}; }
 }
@@ -422,6 +478,47 @@ async function handleAccountAuth(req, res, path, body) {
 }
 
 async function handlePrivateApi(req, res, path, body) {
+  if (path === '/api/grocery-stores' && req.method === 'POST') {
+    const auth=authContext(req); if(!auth){sendJson(res,{error:'Please sign in to find grocery stores.'},401);return true;}
+    const input=readBody(body), location=String(input.location||'').trim(), items=(Array.isArray(input.items)?input.items:[]).map(v=>String(v).trim()).filter(Boolean).slice(0,60);
+    if(!location){sendJson(res,{error:'A city, ZIP code, or location is required.'},400);return true;}
+    if(!items.length){sendJson(res,{error:'At least one grocery item is required.'},400);return true;}
+    try{
+      const geoR=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(location),{headers:{'User-Agent':'RecipeCost-Studio/1.0'}});
+      if(!geoR.ok) throw new Error('Location lookup failed.');
+      const geo=await geoR.json(); if(!geo.length){sendJson(res,{error:'Location was not found.'},404);return true;}
+      const lat=Number(geo[0].lat),lon=Number(geo[0].lon);
+      const q='[out:json][timeout:20];(nwr["shop"~"^(supermarket|grocery|convenience|greengrocer|butcher|seafood|bakery|deli)$"](around:12000,'+lat+','+lon+'););out center tags 80;';
+      const pR=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'RecipeCost-Studio/1.0'},body:'data='+encodeURIComponent(q)});
+      if(!pR.ok) throw new Error('Grocery store lookup failed.');
+      const data=await pR.json(), keywords={butcher:['beef','steak','chicken','turkey','pork','ham','sausage','lamb','goat','meat'],seafood:['fish','salmon','tuna','shrimp','crab','lobster','shellfish','seafood','scallop'],greengrocer:['apple','banana','berry','orange','lemon','lime','fruit','lettuce','spinach','kale','tomato','pepper','onion','garlic','potato','carrot','vegetable','produce'],bakery:['bread','bun','roll','bagel','cake','pastry','tortilla','flour'],deli:['cheese','ham','turkey','salami','deli','sandwich']};
+      const rows=(data.elements||[]).map(place=>{const t=place.tags||{},plat=place.lat??place.center?.lat,plon=place.lon??place.center?.lon;if(!t.name||plat==null||plon==null)return null;const shopType=t.shop||'grocery',broad=['supermarket','grocery','convenience'].includes(shopType),keys=keywords[shopType]||[],likelyItems=broad?items:items.filter(item=>keys.some(k=>item.toLowerCase().includes(k)));return{id:place.type+'-'+place.id,name:t.name,shopType,address:[t['addr:housenumber'],t['addr:street'],t['addr:city']].filter(Boolean).join(' '),website:t.website||t['contact:website']||'',distanceMiles:milesBetween(lat,lon,plat,plon),likelyItems,availabilityNote:'Store-type/category match only; item-level availability is not verified.',mapUrl:'https://www.openstreetmap.org/?mlat='+plat+'&mlon='+plon+'#map=18/'+plat+'/'+plon};}).filter(Boolean).sort((a,b)=>b.likelyItems.length-a.likelyItems.length||a.distanceMiles-b.distanceMiles||a.name.localeCompare(b.name)).slice(0,12);
+      sendJson(res,{location:geo[0].display_name||location,source:'OpenStreetMap',items:rows});
+    }catch(e){sendJson(res,{error:e.message||'Grocery store search failed.'},500);}
+    return true;
+  }
+
+  if (path === '/api/event-vendors' && req.method === 'POST') {
+    const auth=authContext(req); if(!auth){sendJson(res,{error:'Please sign in to search event vendors.'},401);return true;}
+    const input=readBody(body), location=String(input.location||'').trim(), category=String(input.category||'all').trim()||'all';
+    if(!location){sendJson(res,{error:'An event location is required.'},400);return true;}
+    try{
+      const geoR=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(location),{headers:{'User-Agent':'RecipeCost-Studio/1.0'}});
+      if(!geoR.ok) throw new Error('Location lookup failed.');
+      const geo=await geoR.json(); if(!geo.length){sendJson(res,{error:'Location was not found.'},404);return true;}
+      const lat=Number(geo[0].lat),lon=Number(geo[0].lon);
+      const clauses={venue:['nwr["amenity"~"^(events_venue|conference_centre)$"]'],winery:['nwr["craft"="winery"]'],hotel:['nwr["tourism"~"^(hotel|motel|guest_house)$"]'],florist:['nwr["shop"="florist"]'],caterer:['nwr["craft"="caterer"]']};
+      const chosen=category==='all'?Object.values(clauses).flat():(clauses[category]||clauses.venue);
+      const q='[out:json][timeout:20];('+chosen.map(c=>c+'(around:30000,'+lat+','+lon+');').join('')+');out center tags 120;';
+      const oR=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'RecipeCost-Studio/1.0'},body:'data='+encodeURIComponent(q)});
+      if(!oR.ok) throw new Error('Event vendor lookup failed.');
+      const data=await oR.json();
+      const rows=(data.elements||[]).map(place=>{const t=place.tags||{},plat=place.lat??place.center?.lat,plon=place.lon??place.center?.lon;if(!t.name||plat==null||plon==null)return null;const found=t.craft==='winery'?'winery':t.shop==='florist'?'florist':['hotel','motel','guest_house'].includes(t.tourism||'')?'hotel':t.craft==='caterer'?'caterer':'venue';return{id:place.type+'-'+place.id,name:t.name,category:found,address:[t['addr:housenumber'],t['addr:street'],t['addr:city'],t['addr:state']].filter(Boolean).join(' '),website:t.website||t['contact:website']||'',phone:t.phone||t['contact:phone']||'',hours:t.opening_hours||'',mapUrl:'https://www.openstreetmap.org/?mlat='+plat+'&mlon='+plon+'#map=17/'+plat+'/'+plon,distanceMiles:milesBetween(lat,lon,plat,plon),sourceNote:'OpenStreetMap listing; event pricing, packages and availability are not verified.'};}).filter(Boolean).sort((a,b)=>a.distanceMiles-b.distanceMiles||a.name.localeCompare(b.name)).slice(0,24);
+      sendJson(res,{location:geo[0].display_name||location,source:'OpenStreetMap',items:rows});
+    }catch(e){sendJson(res,{error:e.message||'Event vendor search failed.'},500);}
+    return true;
+  }
+
   const privatePath =
     path.startsWith('/api/recipes') ||
     path.startsWith('/api/profile/dietary') ||
@@ -669,6 +766,7 @@ const server = http.createServer(async (req, res) => {
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
 
     if (await handleAccountAuth(req,res,path,body)) return;
+    if (await handleCommunityApi(req,res,path,body)) return;
     if (await handlePrivateApi(req,res,path,body)) return;
 
     if (req.method === 'POST' && (path === '/api/visual' || path === '/railway-api/visual')) {
