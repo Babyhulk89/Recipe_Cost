@@ -866,7 +866,38 @@ const server = http.createServer(async (req, res) => {
     if (contentType.includes('text/html')) {
       let text = await upstream.text();
       text = text.replaceAll(upstreamOrigin, '');
-      const railwayGuard = `<script>(function(){try{if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{})}const nativeFetch=window.fetch.bind(window);window.fetch=function(input,init){try{const url=typeof input==='string'?input:(input&&input.url)||'';const body=init&&typeof init.body==='string'?init.body:'';if(String(url).includes('/api/generate')||String(url).includes('api/generate')||body.includes('\\"/api/generate\\"')||body.includes('\\"path\\":\\"/api/generate\\"')){return nativeFetch('/railway-api/generate',{...(init||{}),method:'POST',headers:{'content-type':'application/json',...((init&&init.headers)||{})},body:init&&init.body?init.body:body})}}catch(e){}return nativeFetch(input,init)};const NativeXHR=window.XMLHttpRequest;window.XMLHttpRequest=function(){const xhr=new NativeXHR();let method='GET',url='';const open=xhr.open;xhr.open=function(m,u,...rest){method=m;url=String(u||'');if(url.includes('/api/generate')||url.includes('api/generate'))u='/railway-api/generate';return open.call(xhr,m,u,...rest)};const send=xhr.send;xhr.send=function(body){try{if((url.includes('/api/generate')||url.includes('api/generate'))&&method.toUpperCase()!=='POST')method='POST'}catch(e){}return send.call(xhr,body)};return xhr};window.XMLHttpRequest.prototype=NativeXHR.prototype}catch(e){console.error('RecipeCost Railway bridge init failed',e)}})();</script>`;
+      const railwayGuard = `<script>(function(){try{
+if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{})}
+function rcToken(){try{const s=JSON.parse(localStorage.getItem("rc_supabase_session")||"null");return s&&s.access_token?s.access_token:""}catch{return""}}
+function localApiUrl(raw){try{const u=new URL(String(raw||""),location.origin);if(u.pathname.startsWith("/api/"))return u.pathname+u.search+u.hash}catch{}return String(raw||"")}
+const nativeFetch=window.fetch.bind(window);
+window.fetch=function(input,init){
+  try{
+    const originalUrl=typeof input==='string'?input:(input&&input.url)||'';
+    const body=init&&typeof init.body==='string'?init.body:'';
+    if(String(originalUrl).includes('/api/generate')||String(originalUrl).includes('api/generate')||body.includes('\\\"/api/generate\\\"')||body.includes('\\\"path\\\":\\\"/api/generate\\\"')){
+      const token=rcToken();const h=new Headers((init&&init.headers)||{});h.set('content-type','application/json');if(token)h.set('authorization','Bearer '+token);
+      return nativeFetch('/railway-api/generate',{...(init||{}),method:'POST',headers:h,body:init&&init.body?init.body:body})
+    }
+    const u=new URL(String(originalUrl||''),location.origin);
+    if(u.pathname.startsWith('/api/')){
+      const token=rcToken();const h=new Headers((init&&init.headers)||{});if(token)h.set('authorization','Bearer '+token);
+      const local=u.pathname+u.search+u.hash;
+      if(typeof input==='string') return nativeFetch(local,{...(init||{}),headers:h});
+      const next=new Request(local,input);return nativeFetch(next,{...(init||{}),headers:h});
+    }
+  }catch(e){}
+  return nativeFetch(input,init)
+};
+const NativeXHR=window.XMLHttpRequest;
+window.XMLHttpRequest=function(){
+  const xhr=new NativeXHR();let method='GET',url='';const open=xhr.open;
+  xhr.open=function(m,u,...rest){method=m;url=String(u||'');try{const parsed=new URL(url,location.origin);if(parsed.pathname.startsWith('/api/'))u=parsed.pathname+parsed.search+parsed.hash;if(parsed.pathname.includes('/api/generate'))u='/railway-api/generate'}catch{}return open.call(xhr,m,u,...rest)};
+  const send=xhr.send;xhr.send=function(body){try{const token=rcToken();if(token&&url&&new URL(url,location.origin).pathname.startsWith('/api/'))xhr.setRequestHeader('Authorization','Bearer '+token)}catch{}return send.call(xhr,body)};
+  return xhr
+};
+window.XMLHttpRequest.prototype=NativeXHR.prototype
+}catch(e){console.error('RecipeCost Railway bridge init failed',e)}})();</script>`;
       text = text.replace('</head>', railwayGuard + '</head>');
       const seasonalLink = '<a href="/seasonal" style="position:fixed;right:18px;bottom:18px;z-index:99999;background:#7c3aed;color:#fff;padding:12px 16px;border-radius:999px;text-decoration:none;font:700 14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.2)">Seasonal Kitchen · Soups</a>';
       text = text.replace('</body>', seasonalLink + '</body>');
