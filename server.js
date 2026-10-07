@@ -3,6 +3,92 @@ import http from 'node:http';
 const upstreamOrigin = 'https://recipecost-studio-h0fb5u.v2.appdeploy.ai';
 const port = Number(process.env.PORT || 3000);
 
+
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || '';
+const railwayAccountUrl = 'https://recipecost-studio-production.up.railway.app/account';
+
+function jwtPayload(token = '') {
+  try {
+    const part = String(token).split('.')[1];
+    if (!part) return null;
+    const normalized = part.replace(/-/g,'+').replace(/_/g,'/');
+    return JSON.parse(Buffer.from(normalized, 'base64').toString('utf8'));
+  } catch { return null; }
+}
+
+function bearerToken(req) {
+  const header = String(req.headers.authorization || '');
+  return header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
+}
+
+function sendJson(res, data, status = 200) {
+  res.statusCode = status;
+  res.setHeader('content-type','application/json; charset=utf-8');
+  res.setHeader('cache-control','no-store');
+  res.end(JSON.stringify(data));
+}
+
+async function supabaseRequest(path, { method='GET', token='', body, prefer='', extraHeaders={} } = {}) {
+  if (!supabaseUrl || !supabaseKey) throw new Error('Supabase is not configured.');
+  const headers = new Headers(extraHeaders);
+  headers.set('apikey', supabaseKey);
+  if (token) headers.set('authorization','Bearer ' + token);
+  if (body !== undefined) headers.set('content-type','application/json');
+  if (prefer) headers.set('prefer', prefer);
+  return fetch(supabaseUrl + path, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+}
+
+async function supabaseJson(path, options = {}) {
+  const r = await supabaseRequest(path, options);
+  const text = await r.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!r.ok) {
+    const message = data?.message || data?.msg || data?.error_description || data?.error || ('Supabase request failed (' + r.status + ')');
+    const err = new Error(message);
+    err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+function accountPage() {
+  const key = JSON.stringify(supabaseKey);
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>RecipeCost Account</title>' +
+  '<style>:root{font-family:Inter,system-ui,sans-serif;color:#352535;background:#fff6ed}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,#ffe6d6 0,#fff6ed 34%,#fbefe8 100%)}.wrap{max-width:760px;margin:auto;padding:42px 18px}.card{background:#fff;border:1px solid #ead9df;border-radius:22px;padding:26px;box-shadow:0 18px 50px rgba(70,35,55,.12)}.brand{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.brand h1{margin:0 0 7px;font-size:34px}.brand a{color:#63364f;font-weight:850;text-decoration:none}.muted{color:#766570}.tabs{display:flex;gap:8px;margin:22px 0}.tabs button,.linkbtn{border:1px solid #dcc7d2;background:#fff;border-radius:11px;padding:10px 14px;font-weight:850;cursor:pointer}.tabs button.active{background:#63364f;color:#fff;border-color:#63364f}label{display:grid;gap:7px;font-weight:800;margin:13px 0}input{padding:12px;border:1px solid #d9cbd2;border-radius:11px;background:#fffaf7}.primary{width:100%;border:0;border-radius:12px;background:#63364f;color:#fff;padding:13px;font-weight:900;cursor:pointer}.notice{margin:14px 0;padding:12px 14px;border-radius:11px;background:#f4edf1}.error{background:#fff0ed;color:#96392e}.signed,.reset{display:none}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.actions button{width:auto}.small{font-size:12px}</style></head><body><main class="wrap"><section class="card"><div class="brand"><div><h1>RecipeCost Account</h1><p class="muted">Your personal email account for saved recipes, meal plans, pantry, family and spending.</p></div><a href="/">Back to RecipeCost</a></div>' +
+  '<div id="signed" class="signed"><div class="notice">Signed in as <strong id="signedEmail"></strong></div><div class="actions"><button id="continueBtn" class="primary">Continue to RecipeCost</button><button id="logout" class="linkbtn">Sign out</button></div></div>' +
+  '<div id="reset" class="reset"><h2>Choose a new password</h2><form id="resetForm"><label>New password<input id="newPassword" type="password" minlength="6" required autocomplete="new-password"/></label><button class="primary">Update password</button></form></div>' +
+  '<div id="authBox"><div class="tabs"><button id="loginTab" class="active" type="button">Sign in</button><button id="signupTab" type="button">Create account</button></div><form id="form"><label>Email<input id="email" type="email" autocomplete="email" required/></label><label>Password<input id="password" type="password" minlength="6" autocomplete="current-password" required/></label><button id="submit" class="primary" type="submit">Sign in</button></form><div class="actions"><button id="forgot" class="linkbtn" type="button">Forgot password</button></div><div id="msg"></div><p class="muted small">New accounts may require email confirmation. RecipeCost never sends your password to AppDeploy.</p></div></section></main>' +
+  '<script>const SB_KEY=' + key + ';let mode="login";const sessionKey="rc_supabase_session",msg=document.getElementById("msg"),authBox=document.getElementById("authBox"),signed=document.getElementById("signed"),reset=document.getElementById("reset");function esc(v){return String(v||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",\'"\':"&quot;"}[c]))}function saveSession(v){localStorage.setItem(sessionKey,JSON.stringify(v))}function readSession(){try{return JSON.parse(localStorage.getItem(sessionKey)||"null")}catch{return null}}function showUser(s){authBox.style.display="none";reset.style.display="none";signed.style.display="block";document.getElementById("signedEmail").textContent=(s&&s.user&&s.user.email)||"your account"}function setMode(v){mode=v;loginTab.classList.toggle("active",v==="login");signupTab.classList.toggle("active",v==="signup");submit.textContent=v==="login"?"Sign in":"Create account";password.autocomplete=v==="login"?"current-password":"new-password";msg.innerHTML=""}loginTab.onclick=()=>setMode("login");signupTab.onclick=()=>setMode("signup");continueBtn.onclick=()=>location.href="/";logout.onclick=()=>{localStorage.removeItem(sessionKey);location.href="/"};const hash=new URLSearchParams(location.hash.replace(/^#/,""));if(hash.get("access_token")){const recovered={access_token:hash.get("access_token"),refresh_token:hash.get("refresh_token"),expires_in:Number(hash.get("expires_in")||3600),token_type:"bearer",user:null};saveSession(recovered);history.replaceState(null,"",location.pathname);if(hash.get("type")==="recovery"){authBox.style.display="none";signed.style.display="none";reset.style.display="block"}else location.href="/"}else{const existing=readSession();if(existing&&existing.access_token)showUser(existing)}form.onsubmit=async(e)=>{e.preventDefault();msg.innerHTML="";const r=await fetch(mode==="login"?"/railway-auth/login":"/railway-auth/signup",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email:email.value.trim(),password:password.value})});const d=await r.json().catch(()=>({error:"Request failed"}));if(!r.ok){msg.innerHTML="<div class=\\"notice error\\">"+esc(d.error||"Authentication failed")+"</div>";return}if(d.session&&d.session.access_token){saveSession(d.session);location.href="/";return}msg.innerHTML="<div class=\\"notice\\">Account created. Check your email to confirm it, then return here and sign in.</div>"};forgot.onclick=async()=>{if(!email.value.trim()){msg.innerHTML="<div class=\\"notice error\\">Enter your email address first.</div>";return}const r=await fetch("/railway-auth/recover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email:email.value.trim()})});const d=await r.json().catch(()=>({}));msg.innerHTML=r.ok?"<div class=\\"notice\\">Password reset email sent. Use the link in that email to return here.</div>":"<div class=\\"notice error\\">"+esc(d.error||"Reset email could not be sent.")+"</div>"};resetForm.onsubmit=async(e)=>{e.preventDefault();const s=readSession();const r=await fetch("/railway-auth/reset",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({accessToken:s&&s.access_token,password:newPassword.value})});const d=await r.json().catch(()=>({}));if(!r.ok){msg.innerHTML="<div class=\\"notice error\\">"+esc(d.error||"Password could not be updated.")+"</div>";return}location.href="/account"};</script></body></html>';
+}
+
+function rewriteAuthBundle(js) {
+  const sbUrl = JSON.stringify(supabaseUrl);
+  const sbKey = JSON.stringify(supabaseKey);
+  js = js.replace(
+    'async signIn(p){var z=',
+    'async signIn(p){location.href="/account";return new Promise(()=>{});var z='
+  );
+  js = js.replace(
+    'async getAccessToken(){const p=fn();return!p||!p.accessToken?null:se(p.accessToken)?await ze():p.accessToken}',
+    'async getAccessToken(){try{let p=JSON.parse(localStorage.getItem("rc_supabase_session")||"null");if(!p||!p.access_token)return null;if(!se(p.access_token))return p.access_token;if(!p.refresh_token)return null;const z=await fetch(' + sbUrl + '+"/auth/v1/token?grant_type=refresh_token",{method:"POST",headers:{"apikey":' + sbKey + ',"Content-Type":"application/json"},body:JSON.stringify({refresh_token:p.refresh_token})});if(!z.ok){localStorage.removeItem("rc_supabase_session");return null}p=await z.json();localStorage.setItem("rc_supabase_session",JSON.stringify(p));return p.access_token}catch{return null}}'
+  );
+  js = js.replace(
+    'async signOut(){try{',
+    'async signOut(){localStorage.removeItem("rc_supabase_session");location.reload();return;try{'
+  );
+  js = js.replace(
+    'isSignedIn(){const p=fn();return p?!se(p.accessToken)||!!p.refreshToken:!1}',
+    'isSignedIn(){try{const p=JSON.parse(localStorage.getItem("rc_supabase_session")||"null");return!!(p&&p.access_token&&(!se(p.access_token)||p.refresh_token))}catch{return!1}}'
+  );
+  return js;
+}
+
 function rewriteCookie(cookie) {
   return cookie
     .replace(/;\s*Domain=[^;]+/gi, '')
