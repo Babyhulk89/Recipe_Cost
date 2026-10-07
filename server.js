@@ -350,27 +350,42 @@ function escapeXml(value = '') {
 }
 
 function visualFrame(input = {}) {
-  const title = escapeXml(input.title || 'RecipeCost Cookthrough');
+  const kind = String(input.visualKind || '').toLowerCase() || (/ingredient/i.test(String(input.stepTitle||'')) ? 'ingredients' : /finished dish|thumbnail|plated/i.test(String(input.stepTitle||'')) ? 'meal' : 'prep');
+  const title = escapeXml(input.title || 'RecipeCost');
   const cuisine = escapeXml(input.cuisine || 'RecipeCost');
-  const stepTitle = escapeXml(input.stepTitle || 'Cooking step');
-  const detail = escapeXml(input.stepDetail || 'Follow the recipe instructions for this stage.');
-  const wrapped = String(detail).match(/.{1,58}(?:\s|$)/g)?.slice(0, 5) || [detail];
-  const lines = wrapped.map((line, i) => '<text x="90" y="' + (360 + i * 42) + '" font-family="Inter,Arial,sans-serif" font-size="27" fill="#4b3f53">' + escapeXml(line.trim()) + '</text>').join('');
+  const stepTitle = escapeXml(input.stepTitle || (kind === 'meal' ? 'Finished dish' : kind === 'ingredients' ? 'Ingredients' : 'Prep & cooking'));
+  const detail = escapeXml(input.stepDetail || '');
+  const ingredientNames = (Array.isArray(input.ingredients) ? input.ingredients : []).map(v => typeof v === 'string' ? v : v?.name).filter(Boolean).slice(0,8).map(escapeXml);
+  const bg = kind === 'meal' ? ['#fff7ed','#f7efff'] : kind === 'ingredients' ? ['#f3fbf3','#fffaf2'] : ['#eef6ff','#fff4ef'];
+  let art = '';
+  if (kind === 'meal') {
+    art = '<ellipse cx="900" cy="395" rx="230" ry="170" fill="#f8f3ef" stroke="#ded1c6" stroke-width="12"/>' +
+      '<ellipse cx="900" cy="395" rx="150" ry="105" fill="#d99a5b" opacity=".32"/>' +
+      '<circle cx="845" cy="370" r="54" fill="#8faf68"/><circle cx="945" cy="355" r="48" fill="#d96f4d"/><circle cx="910" cy="435" r="62" fill="#e4b754"/>' +
+      '<path d="M760 525 Q900 585 1045 525" fill="none" stroke="#7c3aed" stroke-width="8" opacity=".35"/>';
+  } else if (kind === 'ingredients') {
+    const names = ingredientNames.length ? ingredientNames : ['Fresh produce','Main protein','Seasonings','Sauce / base','Garnish'];
+    art = names.slice(0,6).map((name,i) => {
+      const x=690+(i%2)*250, y=240+Math.floor(i/2)*120;
+      return '<rect x="'+x+'" y="'+y+'" width="220" height="88" rx="18" fill="#fff" stroke="#d9e7d6" stroke-width="3"/><circle cx="'+(x+35)+'" cy="'+(y+44)+'" r="22" fill="#8fb36a" opacity=".75"/><text x="'+(x+70)+'" y="'+(y+51)+'" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#3b3340">'+name+'</text>';
+    }).join('');
+  } else {
+    art = '<rect x="720" y="250" width="360" height="250" rx="28" fill="#d8b48d" stroke="#a97d56" stroke-width="8"/>' +
+      '<path d="M770 305 L1015 440" stroke="#5f6570" stroke-width="18" stroke-linecap="round"/><path d="M1005 290 L795 460" stroke="#5f6570" stroke-width="18" stroke-linecap="round"/>' +
+      '<circle cx="760" cy="540" r="46" fill="#d96f4d"/><circle cx="865" cy="555" r="42" fill="#8faf68"/><circle cx="970" cy="540" r="44" fill="#e4b754"/>';
+  }
+  const wrapped = String(detail).match(/.{1,52}(?:\s|$)/g)?.slice(0,4) || [];
+  const lines = wrapped.map((line,i)=>'<text x="86" y="'+(370+i*38)+'" font-family="Inter,Arial,sans-serif" font-size="24" fill="#514655">'+escapeXml(line.trim())+'</text>').join('');
+  const label = kind === 'meal' ? 'FINISHED MEAL' : kind === 'ingredients' ? 'INGREDIENT BOARD' : 'PREP & COOKING';
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">' +
-    '<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7efff"/><stop offset="1" stop-color="#fff7ed"/></linearGradient></defs>' +
-    '<rect width="1280" height="720" fill="url(#bg)"/>' +
-    '<circle cx="1040" cy="170" r="120" fill="#7c3aed" opacity=".10"/>' +
-    '<circle cx="1130" cy="560" r="180" fill="#f59e0b" opacity=".10"/>' +
-    '<rect x="64" y="56" width="1152" height="608" rx="34" fill="#ffffff" stroke="#eadff7" stroke-width="3"/>' +
-    '<text x="90" y="120" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700" fill="#7c3aed">RECIPECOST VISUAL COOKTHROUGH · ' + cuisine + '</text>' +
-    '<text x="90" y="188" font-family="Inter,Arial,sans-serif" font-size="46" font-weight="800" fill="#24123a">' + title + '</text>' +
-    '<line x1="90" y1="225" x2="1190" y2="225" stroke="#eadff7" stroke-width="3"/>' +
-    '<text x="90" y="298" font-family="Inter,Arial,sans-serif" font-size="38" font-weight="800" fill="#24123a">' + stepTitle + '</text>' +
-    lines +
-    '<rect x="90" y="590" width="330" height="46" rx="23" fill="#7c3aed"/>' +
-    '<text x="255" y="621" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="700" fill="#fff">Step-by-step cooking frame</text>' +
+    '<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="'+bg[0]+'"/><stop offset="1" stop-color="'+bg[1]+'"/></linearGradient></defs>' +
+    '<rect width="1280" height="720" fill="url(#bg)"/><rect x="46" y="45" width="1188" height="630" rx="34" fill="#fff" opacity=".92" stroke="#eadff7" stroke-width="3"/>' +
+    '<text x="86" y="105" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="800" fill="#7c3aed">RECIPECOST · '+label+'</text>' +
+    '<text x="86" y="165" font-family="Inter,Arial,sans-serif" font-size="46" font-weight="900" fill="#24123a">'+title+'</text>' +
+    '<text x="86" y="210" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700" fill="#766570">'+cuisine+'</text>' +
+    '<text x="86" y="315" font-family="Inter,Arial,sans-serif" font-size="34" font-weight="850" fill="#24123a">'+stepTitle+'</text>' + lines + art +
     '</svg>';
-  return { data: Buffer.from(svg, 'utf8').toString('base64'), mimeType: 'image/svg+xml' };
+  return { data: Buffer.from(svg, 'utf8').toString('base64'), mimeType: 'image/svg+xml', kind };
 }
 
 function buildRecipe(input = {}) {
@@ -933,7 +948,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const path = (req.url || '').split('?')[0];
     if (req.method === 'GET' && path === '/account') { res.statusCode=200; res.setHeader('content-type','text/html; charset=utf-8'); res.setHeader('cache-control','no-store'); res.end(accountPage()); return; }
-    if (req.method === 'GET' && path === '/seasonal') { res.statusCode = 200; res.setHeader('content-type','text/html; charset=utf-8'); res.end(seasonalPage()); return; }
+    if (req.method === 'GET' && (path === '/seasonal' || path === '/kitchen')) { res.statusCode = 200; res.setHeader('content-type','text/html; charset=utf-8'); res.setHeader('cache-control','no-store'); res.end(seasonalPage()); return; }
     if (req.method === 'GET' && (path === '/media/image.svg' || path === '/media/clip.svg')) {
       const u = new URL(req.url || '/', 'https://recipecost.local');
       const svg = seasonalMediaSvg(u.searchParams.get('title') || 'Seasonal Recipe', u.searchParams.get('season') || currentSeason(), path === '/media/clip.svg');
@@ -1023,6 +1038,24 @@ function rcSession(){try{return JSON.parse(localStorage.getItem("rc_supabase_ses
 function rcToken(){const s=rcSession();return s&&s.access_token?s.access_token:""}
 const __rcs=rcSession();if(__rcs&&__rcs.access_token){nativeSessionSync=fetch('/railway-auth/session',{method:'POST',headers:{'content-type':'application/json'},credentials:'include',body:JSON.stringify({accessToken:__rcs.access_token,refreshToken:__rcs.refresh_token||''})}).catch(()=>{})}
 function localApiUrl(raw){try{const u=new URL(String(raw||""),location.origin);if(u.pathname.startsWith("/api/"))return u.pathname+u.search+u.hash}catch{}return String(raw||"")}
+function rcVisualDataUrl(x){return x&&x.image&&x.image.data?'data:'+(x.image.mimeType||'image/svg+xml')+';base64,'+x.image.data:''}
+async function rcRenderVisualGallery(recipe){
+  try{
+    if(!recipe||!recipe.title)return;
+    const base={title:recipe.title,cuisine:recipe.cuisine||'RecipeCost'};
+    const first=Array.isArray(recipe.instructions)&&recipe.instructions[0]?recipe.instructions[0]:null;
+    const calls=[
+      fetch('/api/visual',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...base,visualKind:'meal',stepTitle:'Finished meal',stepDetail:recipe.summary||''})}).then(r=>r.json()),
+      fetch('/api/visual',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...base,visualKind:'prep',stepTitle:first?.title||'Prep & cooking',stepDetail:first?.detail||'Prepare and cook the recipe step by step.'})}).then(r=>r.json()),
+      fetch('/api/visual',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...base,visualKind:'ingredients',stepTitle:'Ingredients',stepDetail:'Key ingredients for '+recipe.title,ingredients:Array.isArray(recipe.ingredients)?recipe.ingredients.map(i=>i.name):[]})}).then(r=>r.json())
+    ];
+    const [meal,prep,ingredients]=await Promise.all(calls);
+    let panel=document.getElementById('rc-visual-gallery');
+    if(!panel){panel=document.createElement('section');panel.id='rc-visual-gallery';panel.style.cssText='max-width:1180px;margin:22px auto;padding:18px;border:1px solid #eadff7;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(68,32,91,.08);font-family:Inter,system-ui,sans-serif';const target=document.querySelector('.visual-card')||document.querySelector('main')||document.body;target.parentNode?target.parentNode.insertBefore(panel,target.nextSibling):document.body.appendChild(panel)}
+    panel.innerHTML='<h2 style="margin:0 0 6px;color:#24123a">Recipe visuals</h2><p style="margin:0 0 14px;color:#6d6074">Finished meal · Prep & cooking · Ingredients</p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">'+
+      [['Finished meal',meal],['Prep & cooking',prep],['Ingredients',ingredients]].map(([label,data])=>'<figure style="margin:0;border:1px solid #eadff7;border-radius:14px;overflow:hidden;background:#faf7ff"><img alt="'+label+'" src="'+rcVisualDataUrl(data)+'" style="display:block;width:100%;height:auto"/><figcaption style="padding:10px 12px;font-weight:800;color:#352535">'+label+'</figcaption></figure>').join('')+'</div>';
+  }catch(e){console.warn('Recipe visual gallery could not be rendered',e)}
+}
 const nativeFetch=window.fetch.bind(window);
 window.fetch=function(input,init){
   try{
@@ -1030,7 +1063,7 @@ window.fetch=function(input,init){
     const body=init&&typeof init.body==='string'?init.body:'';
     if(String(originalUrl).includes('/api/generate')||String(originalUrl).includes('api/generate')||body.includes('\\\"/api/generate\\\"')||body.includes('\\\"path\\\":\\\"/api/generate\\\"')){
       const token=rcToken();const h=new Headers((init&&init.headers)||{});h.set('content-type','application/json');if(token)h.set('authorization','Bearer '+token);
-      return nativeFetch('/railway-api/generate',{...(init||{}),method:'POST',headers:h,body:init&&init.body?init.body:body})
+      return nativeFetch('/railway-api/generate',{...(init||{}),method:'POST',headers:h,body:init&&init.body?init.body:body}).then(async r=>{try{const c=r.clone();const d=await c.json();if(d&&d.recipe)setTimeout(()=>rcRenderVisualGallery(d.recipe),80)}catch{}return r})
     }
     const u=new URL(String(originalUrl||''),location.origin);
     if(u.pathname.startsWith('/api/')){
@@ -1052,7 +1085,7 @@ window.XMLHttpRequest=function(){
 window.XMLHttpRequest.prototype=NativeXHR.prototype
 }catch(e){console.error('RecipeCost Railway bridge init failed',e)}})();</script>`;
       text = text.replace('</head>', railwayGuard + '</head>');
-      const seasonalLink = '<a href="/seasonal" style="position:fixed;right:18px;bottom:18px;z-index:99999;background:#7c3aed;color:#fff;padding:12px 16px;border-radius:999px;text-decoration:none;font:700 14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.2)">Seasonal Kitchen · Soups</a>';
+      const seasonalLink = '<a href="/kitchen" style="position:fixed;right:18px;bottom:18px;z-index:99999;background:#7c3aed;color:#fff;padding:12px 16px;border-radius:999px;text-decoration:none;font:800 14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.2)">Kitchen Extension</a>';
       text = text.replace('</body>', seasonalLink + '</body>');
       res.end(text);
     } else {
