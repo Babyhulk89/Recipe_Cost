@@ -1,0 +1,17 @@
+{
+  "methods": [
+    "google",
+    "email"
+  ],
+  "headline": "Sign in to RecipeCost",
+  "subtitle": "Private RecipeCost access requires an authorized shared link and your own account.",
+  "style": {
+    "mode": "light",
+    "accentColor": "#7c3aed",
+    "backgroundColor": "#faf7ff",
+    "panelColor": "#ffffff",
+    "textColor": "#24123a",
+    "fontFamily": "Inter, system-ui, sans-serif",
+    "borderRadius": 16
+  }
+}

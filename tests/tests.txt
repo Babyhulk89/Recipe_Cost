@@ -1,0 +1,130 @@
+# Tests
+
+## Test 1 - Generate after selecting multiple options [sanity]
+Viewport: desktop
+Covers: POST /api/generate, generation retry, multi-option recipe builder
+Description: Verifies RecipeCost still generates when cuisine, main food, dietary choices, taste preferences and food selections are combined.
+Steps:
+1. Choose Cuisine = Creole, Main food = Shrimp, Gluten free, two flavor preferences, and several food-group ingredients
+2. Generate a recipe
+3. Wait for the result
+Expected: RecipeCost returns a complete structured recipe. A transient first-pass schema/generation failure is retried automatically instead of immediately showing a generic failure.
+
+## Test 2 - Generate with broad food taxonomy selections
+Viewport: desktop
+Covers: expanded food taxonomy, coherent-subset selection, POST /api/generate
+Description: Verifies choosing several foods does not force every selected ingredient into one incoherent recipe.
+Steps:
+1. Select six to ten foods/categories from different food groups
+2. Choose a specific cultural cuisine
+3. Generate a recipe
+Expected: The result uses a coherent subset of selected foods appropriate to the cuisine and dietary rules rather than failing because every selection cannot fit one dish.
+
+## Test 3 - Generate with saved dietary and allergen profile
+Viewport: mobile
+Covers: saved dietary profile, allergen hard constraints, POST /api/generate, retry behavior
+Description: Verifies saved restrictions continue to work with the repaired generator.
+Steps:
+1. Sign in and load a saved Gluten free + Dairy free profile with a Peanut allergy
+2. Select a cuisine, main food and meal-prep mode
+3. Generate a recipe
+Expected: A recipe is produced while all saved restrictions remain enforced.
+
+## Test 4 - Generate BBQ and large-event recipes
+Viewport: desktop
+Covers: BBQ controls, meal prep, large serving support, POST /api/generate
+Description: Verifies complex BBQ and event options do not break generation.
+Steps:
+1. Choose St. Louis BBQ, low-and-slow smoking, Hickory, Dry rub and a BBQ side
+2. Set a large serving count and a batch-prep mode
+3. Generate
+Expected: RecipeCost generates usable BBQ guidance with safe batch/capacity notes instead of failing under the larger option set.
+
+## Test 5 - Generation failure displays useful feedback
+Viewport: desktop
+Covers: frontend generation error handling, backend retry
+Description: Verifies a genuine two-attempt failure is explained rather than silently failing.
+Steps:
+1. Trigger a generation request
+2. If the backend cannot complete the request after retry, inspect the visible error message
+Expected: The user receives a useful generation failure message indicating retry occurred rather than the old opaque generic error.
+
+## Test 6 - Private access gate and account creation [sanity]
+Viewport: desktop
+Covers: private app gate, owner activation, invite sharing, sign-in/account creation, backend access restriction
+Description: Verifies the ordinary app URL does not expose RecipeCost and an authorized shared link requires account sign-in before entry.
+Steps:
+1. Open the ordinary RecipeCost URL in a signed-out browser
+2. Confirm only the Private Access screen is visible
+3. Open an owner or invite link
+4. Sign in or create an account with the configured Google or email method
+5. Complete invite redemption and reload the page
+Expected: Unauthorized visitors cannot use app features; an authorized signed-in account can enter and retains access after reload.
+
+## Test 7 - Seasonal Kitchen access and pantry workflow
+Viewport: desktop
+Covers: Kitchen navigation, seasonal foods, Inventory integration, expiration-first cooking, pantry-first generation
+Description: Verifies Kitchen is directly accessible and uses the signed-in user's existing pantry without removing or replacing Inventory.
+Steps:
+1. Sign in with authorized private access and add pantry items in Inventory, including one item expiring within 7 days
+2. Open Kitchen from the main navigation
+3. Confirm the current month's seasonal ingredient cards, pantry ingredients, and expiring-soon item appear
+4. Choose Cook from my pantry or Build an expiration-first recipe
+Expected: Kitchen opens directly from navigation and sends a coherent subset of the user's pantry/expiring foods into the existing recipe generator while Inventory, Grocery, and Planner remain accessible.
+
+## Test 8 - Selection and demographic generation
+Viewport: desktop
+Covers: direct ingredient selection, Kitchen one-click generation, Meal/Snack/Drink type switching, Kids/Teens/Adults subtype mapping
+Description: Verifies the generator uses the current selection rather than stale state from the previous dish type or ingredient choice.
+Steps:
+1. Select a specifically named food such as Salmon and generate; confirm Salmon is used unless a saved allergy/dietary rule conflicts
+2. Switch Recipe type from Meal to Snack, choose Kids snack, and generate
+3. Switch Recipe type to Drink, choose Teen drink, and generate
+4. Open Kitchen and click a seasonal ingredient card
+Expected: Each request reflects the current selected ingredient and current recipe type/subtype. Kids/Teen choices produce age-appropriate primary recipes, and Kitchen one-click generation uses the clicked ingredient immediately rather than the previous selection.
+
+## Test 9 - Stability fallback and account-data recovery
+Viewport: desktop
+Covers: recipe generation fallback, nutrition fallback, saved/grocery/planner/inventory/profile read retry, Outlook calendar duration
+Description: Verifies common transient failures do not collapse RecipeCost into repeated generic error banners.
+Steps:
+1. Generate a recipe using current selections and confirm a usable recipe is returned even if advanced structured generation fails
+2. Request Nutrition and confirm the page remains usable if the estimator is unavailable
+3. Navigate through Saved, Grocery, Planner, Kitchen/Inventory, Nutrition, and dietary settings after sign-in
+4. Open an Outlook calendar link for a scheduled meal
+Expected: Data reads automatically retry once without repeated startup error banners; generation returns either a full recipe or a clearly labeled simplified fallback; nutrition never crashes the recipe page; Outlook uses a 90-minute end time after the start.
+
+## Test 10 - Recipe 500 recovery and direct Kitchen links
+Viewport: desktop
+Covers: /api/generate failure recovery, /api/generate-fallback, Kitchen direct link, Seasonal Kitchen direct link, private access preservation
+Description: Verifies a failed advanced generation request never leaves the user on a raw status-code error and secondary Kitchen links remain directly clickable.
+Steps:
+1. Generate a recipe from several selections
+2. If the advanced /api/generate request fails or times out, allow the automatic fallback request to run
+3. Confirm a usable simplified recipe appears with a recovery notice instead of a raw 500 error
+4. Click Kitchen link and Seasonal link in the header while signed in with private access
+5. Open /?view=kitchen and /?view=seasonal directly in an authorized session
+Expected: Recipe generation recovers automatically through the deterministic fallback route; no raw Request failed with status code 500 message is shown; both direct links open the existing Kitchen/Seasonal Kitchen feature without removing or replacing any current app functionality.
+
+
+## Test 11 - Kitchen feeds full dynamic generator
+Viewport: desktop
+Covers: Kitchen/Seasonal ingredient selection, main Recipe Generator preservation, Meal/Snack/Drink, audience/cuisine/protein/dietary/taste/cooking/prep settings
+Description: Verifies Kitchen acts as an ingredient source rather than forcing a seasonal-only Meal.
+Steps:
+1. Set Recipe type to Drink or Snack and choose a subtype/audience
+2. Choose cuisine, dietary restrictions, taste, cooking/prep options as applicable
+3. Open Kitchen and select one seasonal or pantry ingredient
+4. Return to Create and verify existing generator choices remain selected
+5. Generate
+Expected: Kitchen ingredients are merged into the main generator without forcing Meal, clearing other settings, or limiting output to a seasonal-only recipe.
+
+## Test 12 - Private access secret is not committed
+Viewport: desktop
+Covers: private owner bootstrap, repository secret hygiene
+Description: Verifies source uses AppDeploy secret storage for the owner bootstrap token.
+Steps:
+1. Inspect backend source
+2. Confirm RECIPECOST_OWNER_BOOTSTRAP_TOKEN is read with the AppDeploy secrets API
+3. Confirm no owner bootstrap token value is hard-coded
+Expected: Private owner activation remains supported without committing the secret value to source control.
