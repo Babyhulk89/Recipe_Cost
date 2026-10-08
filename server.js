@@ -49,6 +49,20 @@ function sendJson(res, data, status = 200) {
 
 async function supabaseRequest(path, { method='GET', token='', body, prefer='', extraHeaders={} } = {}) {
   if (!supabaseUrl || !supabaseKey) throw new Error('Supabase is not configured.');
+
+  if (token && String(path).startsWith('/rest/v1/')) {
+    const headers = new Headers();
+    headers.set('apikey', supabaseKey);
+    headers.set('authorization','Bearer ' + token);
+    headers.set('content-type','application/json');
+    const proxy = await fetch(supabaseUrl + '/functions/v1/recipecost-data', {
+      method:'POST',
+      headers,
+      body:JSON.stringify({ path, method, body, prefer })
+    });
+    return proxy;
+  }
+
   const headers = new Headers(extraHeaders);
   headers.set('apikey', supabaseKey);
   if (token) headers.set('authorization','Bearer ' + token);
