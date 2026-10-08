@@ -937,6 +937,12 @@ async function handlePrivateApi(req, res, path, body) {
       try { bytes = Buffer.from(image,'base64'); } catch { bytes = null; }
       if (!bytes || !bytes.length) { sendJson(res,{error:'Receipt image data could not be read.'},400); return true; }
       if (bytes.length > 15 * 1024 * 1024) { sendJson(res,{error:'Receipt image is too large. Use an image under 15 MB.'},413); return true; }
+      if (bytes.length < 512) { sendJson(res,{error:'Receipt image is too small or incomplete. Use a clear receipt photo.'},400); return true; }
+      const isPng = bytes.length >= 8 && bytes[0]===0x89 && bytes[1]===0x50 && bytes[2]===0x4e && bytes[3]===0x47 && bytes[4]===0x0d && bytes[5]===0x0a && bytes[6]===0x1a && bytes[7]===0x0a;
+      const isJpeg = bytes.length >= 3 && bytes[0]===0xff && bytes[1]===0xd8 && bytes[2]===0xff;
+      const isWebp = bytes.length >= 12 && bytes.subarray(0,4).toString('ascii')==='RIFF' && bytes.subarray(8,12).toString('ascii')==='WEBP';
+      const mimeOk = (/png/i.test(mimeType) && isPng) || (/jpe?g/i.test(mimeType) && isJpeg) || (/webp/i.test(mimeType) && isWebp);
+      if (!mimeOk) { sendJson(res,{error:'Receipt image format does not match the uploaded file. Use a valid JPG, PNG, or WebP image.'},400); return true; }
       try {
         const worker = await getReceiptOcrWorker();
         const result = await worker.recognize(bytes);
