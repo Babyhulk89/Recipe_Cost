@@ -1,5 +1,11 @@
 # RecipeCost Studio
 
+## Canonical live app
+
+https://recipecost-studio-h0fb5u.v2.appdeploy.ai/
+
+Use this as the single current RecipeCost URL. Legacy RecipeCost section aliases on this host are normalized into the current application.
+
 Current source for the private RecipeCost Studio application.
 
 ## Access model

@@ -129,3 +129,15 @@ Steps:
 3. Select Add to Menu
 4. Open Kitchen
 Expected: The generated recipe appears in the Kitchen menu draft under the selected course and can be combined with other generated or AI-produced menu items.
+
+
+## Test 14 - Legacy RecipeCost links converge on current live app
+Viewport: desktop
+Covers: legacy view query aliases, current canonical live app, private access preservation
+Description: Verifies older RecipeCost section links resolve inside the current application instead of creating separate versions.
+Steps:
+1. Open the current app with ?view=seasonal
+2. Sign in with authorized private access
+3. Confirm Kitchen opens
+4. Repeat with ?view=kitchen, ?view=menu, ?view=create, ?view=planner, ?view=grocery, ?view=saved, ?view=nutrition and ?view=inventory
+Expected: Each legacy section alias resolves inside the current RecipeCost live app while private invite/account parameters remain intact.
