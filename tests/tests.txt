@@ -100,14 +100,14 @@ Expected: The main Kitchen tab works and the extra Kitchen link and Seasonal lin
 
 ## Test 11 - Kitchen Menu Builder
 Viewport: desktop
-Covers: POST /api/kitchen-menu, pantry/seasonal menu planning
-Description: Verifies Kitchen can produce a coordinated menu.
+Covers: POST /api/kitchen-menu, pantry/seasonal menu planning, 3-course menu, 4-course menu
+Description: Verifies Kitchen can produce an exact 3-course or 4-course coordinated menu.
 Steps:
 1. Open Kitchen
-2. Choose occasion and servings
-3. Optionally enter a menu direction
-4. Select Produce menu
-Expected: A 3-7 item menu appears with course, dish name, description and Kitchen ingredient usage.
+2. Choose occasion, servings and 3 courses
+3. Produce a menu and confirm exactly 3 courses appear
+4. Switch to 4 courses and produce another menu
+Expected: The menu contains exactly the selected 3 or 4 courses with dish names, descriptions and Kitchen ingredient usage.
 
 ## Test 12 - Send menu item to Recipe Generator
 Viewport: desktop
@@ -117,3 +117,15 @@ Steps:
 1. Produce a Kitchen menu
 2. Select Send to Recipe Generator on one menu item
 Expected: Create opens with the menu item prompt and Kitchen ingredients while normal Recipe Generator controls remain available.
+
+
+## Test 13 - Add generated recipe to menu draft
+Viewport: desktop
+Covers: generated recipe menu handoff, Kitchen menu draft, course assignment
+Description: Verifies an already generated recipe can become part of a custom multi-course menu.
+Steps:
+1. Generate a recipe
+2. Choose a course such as Main course or Dessert
+3. Select Add to Menu
+4. Open Kitchen
+Expected: The generated recipe appears in the Kitchen menu draft under the selected course and can be combined with other generated or AI-produced menu items.
