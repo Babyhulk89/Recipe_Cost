@@ -49,15 +49,17 @@ Steps:
 2. Allow recovery to run if advanced generation fails
 Expected: A usable recipe appears without a raw status-code error or alarming fallback copy.
 
-## Test 6 - Private access gate and account creation
+## Test 6 - Shared link login and private account creation
 Viewport: desktop
-Covers: private app gate, owner/invite access, sign-in, backend restriction
-Description: Verifies unauthorized visitors cannot use RecipeCost.
+Covers: login-required app gate, Google/email sign-in, per-user private data, owner separation
+Description: Verifies the normal RecipeCost URL can be shared and each person receives access through their own login.
 Steps:
-1. Open the ordinary RecipeCost URL signed out
-2. Confirm only Private Access is visible
-3. Open an authorized invite or owner link and sign in
-Expected: Only authorized signed-in accounts can enter the application.
+1. Open the normal RecipeCost live URL signed out
+2. Confirm the app requires sign-in before private features open
+3. Sign in or create an account with Google or email
+4. Enter RecipeCost without an owner invite code
+5. Save a recipe or add a grocery item
+Expected: Any signed-in user can access RecipeCost from the shared canonical link; their private data is scoped to their own user account and owner-only controls are not granted.
 
 ## Test 7 - Kitchen ingredient workflow
 Viewport: desktop
